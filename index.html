@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Floating Digital Countdown - Android Box Ô Tô</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- MAIN FLOATING POPUP WIDGET -->
+    <div class="floating-widget" id="floatingWidget">
+        <div class="widget-header" id="widgetHeader">
+            <div class="drag-handle" title="Chạm giữ để kéo di chuyển trên màn hình ô tô">
+                <span class="drag-icon">⣿</span>
+                <span class="widget-title" id="widgetTitle">ĐẾM NGƯỢC POPUP</span>
+            </div>
+            <div class="widget-controls">
+                <button class="icon-btn-text" id="pipBtn" onclick="togglePiP(event)" style="background: rgba(0, 243, 255, 0.22); border-color: var(--primary); color: var(--primary); font-weight: 900;" title="Mở cửa sổ nổi PiP (Không cần xin quyền Android)">📺 CỬA SỔ NỔI</button>
+                <button class="icon-btn-text" id="autoMinBtn" onclick="handleToggleAutoMin(event)">🎈 TỰ ẨN</button>
+                <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)">🔊</button>
+                <button class="icon-btn" title="Thu nhỏ bong bóng" onclick="minimizeToBubble(event)">⚊</button>
+            </div>
+        </div>
+
+        <div class="widget-body">
+            <!-- PHÍA BÊN TRÁI: BÀN PHÍM SỐ NGANG -->
+            <div class="body-left">
+                <div class="numpad-grid">
+                    <button class="num-btn" onclick="handleNum('1', event)">1</button>
+                    <button class="num-btn" onclick="handleNum('2', event)">2</button>
+                    <button class="num-btn" onclick="handleNum('3', event)">3</button>
+                    <button class="num-btn" onclick="handleNum('4', event)">4</button>
+                    <button class="num-btn" onclick="handleNum('5', event)">5</button>
+                    <button class="num-btn" onclick="handleNum('6', event)">6</button>
+                    <button class="num-btn" onclick="handleNum('7', event)">7</button>
+                    <button class="num-btn" onclick="handleNum('8', event)">8</button>
+                    <button class="num-btn" onclick="handleNum('9', event)">9</button>
+                    <button class="num-btn btn-clear" title="Xoá hết" onclick="handleClear(event)">XOÁ</button>
+                    <button class="num-btn" onclick="handleNum('0', event)">0</button>
+                    <button class="num-btn btn-backspace" title="Xoá 1 số" onclick="handleBackspace(event)">⌫</button>
+                </div>
+            </div>
+
+            <!-- PHÍA BÊN PHẢI: ĐỒNG HỒ, NÚT BẮT ĐẦU & PRESETS -->
+            <div class="body-right">
+                <div class="status-indicator" id="statusIndicator">
+                    <span id="statusIcon">⏱️</span> <span id="statusText">SẴN SÀNG</span>
+                </div>
+                
+                <div class="digital-display" id="digitalDisplay" title="Chạm để xoá thời gian" onclick="handleClear(event)">
+                    <span class="digit" id="digit1">0</span>
+                    <span class="digit" id="digit2">0</span>
+                    <span class="digit" id="digit3">0</span>
+                </div>
+                <div class="unit-label">GIÂY</div>
+
+                <!-- PHÍM ĐIỀU KHIỂN CHÍNH -->
+                <div class="quick-actions">
+                    <button id="startBtn" class="btn btn-start" onclick="handleStart(event)">▶ BẮT ĐẦU</button>
+                    <button id="pauseBtn" class="btn btn-pause" onclick="handlePause(event)">⏸ DỪNG</button>
+                    <button id="resetBtn" class="btn btn-reset" onclick="handleReset(event)">↺ ĐẶT LẠI</button>
+                </div>
+
+                <!-- PHÍM CHỌN NHANH PRESETS: 60s, 80s, 100s, 120s -->
+                <div class="preset-row">
+                    <button class="preset-chip" onclick="handlePreset(60, event)">60s</button>
+                    <button class="preset-chip" onclick="handlePreset(80, event)">80s</button>
+                    <button class="preset-chip" onclick="handlePreset(100, event)">100s</button>
+                    <button class="preset-chip" onclick="handlePreset(120, event)">120s</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MINIMIZED BUBBLE -->
+    <div class="floating-bubble hidden" id="floatingBubble" onclick="showWidget(event)">
+        <div class="bubble-content">
+            <span class="bubble-icon" id="bubbleIcon">⏱️</span>
+            <span class="bubble-digits" id="bubbleDigits">030</span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

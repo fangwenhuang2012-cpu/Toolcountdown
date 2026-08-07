@@ -1,0 +1,565 @@
+:root {
+    color-scheme: normal;
+    --bg-dark: rgba(10, 14, 23, 0.85);
+    --bg-opacity: 0.60;
+    --card-bg: rgba(15, 23, 42, var(--bg-opacity, 0.60));
+    --card-border: rgba(0, 243, 255, 0.35);
+    
+    --primary: #00f3ff;
+    --primary-glow: rgba(0, 243, 255, 0.45);
+    
+    --warning: #ffaa00;
+    --warning-glow: rgba(255, 170, 0, 0.55);
+    
+    --danger: #ff0055;
+    --danger-glow: rgba(255, 0, 85, 0.65);
+    
+    --success: #00ff88;
+    
+    --text-main: #ffffff;
+    --text-muted: #94a3b8;
+
+    --digital-font: 'Orbitron', monospace;
+    --sans-font: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+img, svg, canvas, video {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: contain !important;
+}
+
+html, body {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--text-main);
+    font-family: var(--sans-font);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    pointer-events: none !important;
+}
+
+.overlay-background {
+    display: none !important;
+}
+
+/* DRAGGABLE FLOATING POPUP WIDGET - COMPACT FOR CAR ANDROID BOX SCREENS */
+.floating-widget {
+    position: fixed;
+    top: 10px;
+    left: 15px;
+    width: min(420px, calc(100vw - 12px));
+    height: min(290px, calc(100vh - 12px));
+    max-height: calc(100vh - 12px);
+    background: rgba(15, 23, 42, var(--bg-opacity, 0.75));
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 2px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 0 18px rgba(0, 243, 255, 0.2);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    will-change: transform;
+    transition: opacity 0.25s ease, border-color 0.2s ease, transform 0.2s ease, width 0.25s ease, height 0.25s ease, background 0.2s ease;
+    pointer-events: auto !important;
+}
+
+.floating-widget.is-dragging,
+.floating-bubble.is-dragging {
+    transition: none !important;
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 243, 255, 0.4);
+    cursor: grabbing;
+}
+
+.floating-widget.hidden {
+    opacity: 0;
+    pointer-events: none !important;
+    visibility: hidden;
+    display: none !important;
+}
+
+/* Header & Controls */
+.widget-header {
+    background: rgba(15, 23, 42, 0.85);
+    padding: 0.5rem 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.widget-header:active {
+    cursor: grabbing;
+}
+
+.drag-handle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.drag-icon {
+    font-size: 1.1rem;
+    color: var(--primary);
+    letter-spacing: -2px;
+    flex-shrink: 0;
+}
+
+.widget-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.widget-controls {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.icon-btn {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.98rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover, .icon-btn:active {
+    background: var(--primary);
+    color: #000;
+}
+
+.icon-btn-text {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 0 0.5rem;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    font-family: var(--sans-font);
+    white-space: nowrap;
+}
+
+.icon-btn-text:hover, .icon-btn-text:active {
+    background: var(--primary);
+    color: #000;
+}
+
+/* Widget Body: ALWAYS 2-COLUMN LANDSCAPE GRID (Numpad STRICTLY on the Left) */
+.widget-body {
+    padding: 0.7rem 0.8rem;
+    display: grid !important;
+    grid-template-columns: minmax(160px, 195px) 1fr !important;
+    gap: 0.75rem;
+    align-items: stretch !important;
+    overflow: hidden;
+    flex: 1;
+    width: 100%;
+    height: calc(100% - 44px);
+}
+
+/* PHÍA BÊN TRÁI: BÀN PHÍM SỐ (ALWAYS ORDER 1 ON THE LEFT) */
+.body-left {
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+    width: 100%;
+    height: 100%;
+    order: 1 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+}
+
+/* PHÍA BÊN PHẢI: ĐỒNG HỒ & ĐIỀU KHIỂN (ALWAYS ORDER 2 ON THE RIGHT) */
+.body-right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    width: 100%;
+    height: 100%;
+    order: 2 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+}
+
+.status-indicator {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--primary);
+    background: rgba(0, 243, 255, 0.12);
+    padding: 0.2rem 0.65rem;
+    border-radius: 14px;
+    border: 1px solid var(--primary);
+    white-space: nowrap;
+}
+
+.digital-display {
+    font-family: var(--digital-font), 'Courier New', Courier, monospace;
+    font-size: clamp(2.8rem, 8vw, 4.8rem);
+    font-weight: 900;
+    line-height: 1;
+    color: var(--primary);
+    text-shadow: 0 0 22px var(--primary-glow);
+    display: flex;
+    gap: 0.05ch;
+    background: rgba(4, 7, 17, 0.85);
+    padding: 0.5rem 0.65rem;
+    border-radius: 16px;
+    border: 2px solid rgba(0, 243, 255, 0.35);
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    flex: 1;
+}
+
+.digit {
+    display: inline-block;
+    min-width: 0.55em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.unit-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-top: -0.1rem;
+}
+
+/* BÀN PHÍM SỐ BÊN TRÁI (LEFT NUMPAD 0-9) */
+.numpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 0.4rem;
+    width: 100%;
+    height: 100%;
+}
+
+.num-btn {
+    background: rgba(20, 31, 54, 0.85);
+    color: #fff;
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    border-radius: 10px;
+    padding: 0.2rem 0.05rem;
+    font-family: var(--digital-font);
+    font-size: 1.35rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.1s;
+    text-align: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.num-btn:active {
+    background: var(--primary);
+    color: #000;
+    transform: scale(0.94);
+}
+
+.btn-clear {
+    color: var(--danger);
+    font-weight: 900;
+    font-size: 0.85rem;
+    border-color: rgba(255, 0, 85, 0.4);
+}
+
+.btn-backspace {
+    color: var(--warning);
+    font-size: 1.15rem;
+    border-color: rgba(255, 170, 0, 0.4);
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.btn {
+    flex: 1;
+    border: none;
+    padding: 0.65rem 0.25rem;
+    border-radius: 11px;
+    font-family: var(--sans-font);
+    font-weight: 800;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.15s;
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+.btn-start {
+    background: linear-gradient(135deg, #00d2ff, #0072ff);
+    color: #fff;
+}
+
+.btn-pause {
+    background: linear-gradient(135deg, #ffaa00, #e67e22);
+    color: #000;
+}
+
+.btn-reset {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* PRESETS ROW */
+.preset-row {
+    display: flex;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.preset-chip {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: var(--text-main);
+    padding: 0.52rem 0.2rem;
+    border-radius: 9px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    flex: 1;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    min-width: 0;
+}
+
+.preset-chip:hover, .preset-chip:active {
+    background: rgba(0, 243, 255, 0.25);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* RUNNING MODE: HIDE LEFT NUMPAD & PRESETS, ENLARGE DISPLAY BY 50%+ */
+.floating-widget.running-mode {
+    width: min(520px, calc(100vw - 12px));
+    height: auto !important;
+    max-height: calc(100vh - 12px);
+}
+
+.floating-widget.running-mode .widget-body {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0.85rem 1rem !important;
+    gap: 0.75rem !important;
+    height: auto !important;
+}
+
+.floating-widget.running-mode .body-left,
+.floating-widget.running-mode .preset-row {
+    display: none !important;
+}
+
+.floating-widget.running-mode .digital-display {
+    font-size: clamp(5.8rem, 18vw, 9rem);
+    padding: 0.85rem 1rem;
+    min-height: 180px;
+    border-width: 3px;
+    border-radius: 18px;
+    text-shadow: 0 0 45px var(--primary-glow);
+}
+
+.floating-widget.running-mode .btn {
+    padding: 0.75rem 0.4rem;
+    font-size: 0.95rem;
+    border-radius: 12px;
+}
+
+/* Visual Warnings Mode */
+.floating-widget.warning-mode {
+    border-color: var(--warning);
+    box-shadow: 0 0 35px var(--warning-glow);
+}
+.floating-widget.warning-mode .digital-display {
+    color: var(--warning);
+    text-shadow: 0 0 35px var(--warning-glow);
+}
+
+.floating-widget.critical-mode {
+    border-color: var(--danger);
+    box-shadow: 0 0 45px var(--danger-glow);
+    animation: flash-border 0.5s infinite alternate;
+}
+.floating-widget.critical-mode .digital-display {
+    color: var(--danger);
+    text-shadow: 0 0 45px var(--danger-glow);
+}
+
+@keyframes flash-border {
+    0% { border-color: var(--danger); }
+    100% { border-color: #ffffff; }
+}
+
+/* MINIMIZED FLOATING BUBBLE */
+.floating-bubble {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 54px;
+    height: 54px;
+    background: rgba(15, 23, 42, 0.90);
+    backdrop-filter: blur(12px);
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 16px var(--primary-glow);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1000;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.25s ease;
+    touch-action: none;
+    will-change: transform;
+    pointer-events: auto !important;
+}
+
+body.is-native-app .floating-bubble {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 50% !important;
+}
+
+.floating-bubble:active {
+    transform: scale(0.92);
+}
+
+.floating-bubble.hidden {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+.bubble-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.bubble-icon {
+    font-size: 0.85rem !important;
+    line-height: 1 !important;
+    max-width: 20px;
+    max-height: 20px;
+    overflow: hidden;
+}
+
+.bubble-digits {
+    font-family: var(--digital-font);
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: var(--primary);
+    margin-top: 1px;
+    line-height: 1;
+}
+
+/* MEDIA QUERY FOR SMALL MOBILE / PORTRAIT APK SCREENS (< 480px) */
+@media screen and (max-width: 480px) {
+    .floating-widget {
+        width: calc(100vw - 8px);
+        top: 8px;
+        left: 4px;
+        border-radius: 16px;
+    }
+
+    .widget-body {
+        grid-template-columns: 120px 1fr !important;
+        gap: 0.35rem !important;
+        padding: 0.45rem !important;
+    }
+
+    .digital-display {
+        font-size: 2.2rem !important;
+        padding: 0.25rem 0.3rem !important;
+    }
+
+    .num-btn {
+        padding: 0.35rem 0.05rem !important;
+        font-size: 0.92rem !important;
+    }
+
+    .btn {
+        font-size: 0.68rem !important;
+        padding: 0.4rem 0.1rem !important;
+    }
+
+    .preset-chip {
+        font-size: 0.68rem !important;
+        padding: 0.3rem 0.05rem !important;
+    }
+}
+
+

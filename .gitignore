@@ -1,0 +1,15 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.aar
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE & System
+.idea/
+.DS_Store
+*.iml
