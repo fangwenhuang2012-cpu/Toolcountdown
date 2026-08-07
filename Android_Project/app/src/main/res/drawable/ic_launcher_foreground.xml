@@ -5,20 +5,19 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Glowing Cyan Outer Ring Arc / Timer Body (Centered in 72dp viewport) -->
+    <!-- Outer Timer Ring -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#00F3FF"
         android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M 36,36 A 25,25 0 1,1 72,36" />
+        android:pathData="M 54,29 A 25,25 0 1,1 53.99,29" />
 
     <!-- Top Crown Button -->
     <path
         android:strokeColor="#00F3FF"
         android:strokeWidth="3.5"
         android:strokeLineCap="round"
-        android:pathData="M 54,23 L 54,29 M 48,23 L 60,23" />
+        android:pathData="M 54,20 L 54,26 M 47,20 L 61,20" />
 
     <!-- Clock / Countdown Hands -->
     <path
