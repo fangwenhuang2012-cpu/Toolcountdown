@@ -290,11 +290,23 @@
             padding: 0.2rem 0.65rem;
             border-radius: 14px;
             border: 1px solid var(--primary);
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 6px;
             white-space: nowrap;
         }
+
+        #statusIcon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.1em;
+            height: 1.1em;
+            font-size: 0.85rem;
+            line-height: 1;
+            overflow: hidden;
+        }
+
 
         .digital-display {
             font-family: var(--digital-font);
@@ -529,7 +541,7 @@
 
         .floating-bubble.hidden { display: none !important; pointer-events: none !important; }
         .bubble-content { display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-        .bubble-icon { font-size: 0.85rem !important; line-height: 1 !important; max-width: 20px; max-height: 20px; overflow: hidden; }
+        .bubble-icon { font-size: 0.85rem !important; line-height: 1 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; width: 1.1em !important; height: 1.1em !important; max-width: 20px !important; max-height: 20px !important; overflow: hidden !important; }
         .bubble-digits { font-family: var(--digital-font); font-size: 0.85rem; font-weight: 900; color: var(--primary); margin-top: 1px; line-height: 1; }
 
         /* MEDIA QUERY FOR SMALL MOBILE / PORTRAIT APK SCREENS (< 480px) */

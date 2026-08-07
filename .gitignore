@@ -13,3 +13,6 @@ __pycache__/
 .idea/
 .DS_Store
 *.iml
+scratch/
+.antigravity/
+
