@@ -29,7 +29,7 @@ jobs:
       - name: Build APK with Gradle
         run: |
           cd Android_Project
-          gradle assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/app-debug.apk ../DigitalCountdown_Floating_v1.apk
 
       - name: Upload APK Artifact
