@@ -4,31 +4,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Outer Timer Ring -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#00F3FF"
-        android:strokeWidth="4"
-        android:pathData="M 54,29 A 25,25 0 1,1 53.99,29" />
-
-    <!-- Top Crown Button -->
-    <path
-        android:strokeColor="#00F3FF"
-        android:strokeWidth="3.5"
-        android:strokeLineCap="round"
-        android:pathData="M 54,20 L 54,26 M 47,20 L 61,20" />
-
-    <!-- Clock / Countdown Hands -->
-    <path
-        android:strokeColor="#00F3FF"
-        android:strokeWidth="3.5"
-        android:strokeLineCap="round"
-        android:pathData="M 54,54 L 66,42 M 54,54 L 44,44" />
-
-    <!-- Center Pin -->
     <path
         android:fillColor="#00F3FF"
-        android:pathData="M 54,54 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
-
+        android:pathData="M54,28A26,26 0 1,0 80,54A26.03,26.03 0 0,0 54,28ZM54,74A20,20 0 1,1 74,54A20.02,20.02 0 0,1 54,74ZM51,18H57V24H51ZM45,18H63V21H45ZM52,38H56V54H52ZM54,54L65,43L68,46L55,57Z"/>
 </vector>
