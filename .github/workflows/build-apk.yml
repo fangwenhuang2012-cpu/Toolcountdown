@@ -29,8 +29,8 @@ jobs:
       - name: Build APK with Gradle
         run: |
           cd Android_Project
-          gradle assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk ../DigitalCountdown_Floating_v1.apk
+          gradle :app:assembleDebug --no-daemon --stacktrace
+          find . -name "*.apk" -exec cp {} ../DigitalCountdown_Floating_v1.apk \;
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
