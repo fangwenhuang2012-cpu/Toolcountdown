@@ -21,20 +21,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Fix line endings and permissions for gradlew
-        run: |
-          sed -i 's/\r$//' Android_Project/gradlew
-          chmod +x Android_Project/gradlew
-
       - name: Sync Standalone HTML to Android Assets
         run: |
           mkdir -p Android_Project/app/src/main/assets
           cp countdown_standalone.html Android_Project/app/src/main/assets/countdown_standalone.html
 
-      - name: Build APK with Gradle Wrapper
+      - name: Build APK with Gradle
         run: |
           cd Android_Project
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../DigitalCountdown_Floating_v1.apk
 
       - name: Upload APK Artifact
