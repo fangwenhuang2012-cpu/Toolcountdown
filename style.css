@@ -172,6 +172,11 @@ html, body {
     color: #000;
 }
 
+.icon-btn.btn-close:hover, .icon-btn.btn-close:active {
+    background: #ff0055 !important;
+    color: #ffffff !important;
+}
+
 .icon-btn-text {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -515,6 +520,13 @@ html, body {
     pointer-events: auto !important;
 }
 
+body.is-native-app {
+    background: transparent !important;
+    background-color: transparent !important;
+    overflow: hidden !important;
+}
+
+body.is-native-app .floating-widget,
 body.is-native-app .floating-bubble {
     position: absolute !important;
     top: 0 !important;
@@ -523,6 +535,13 @@ body.is-native-app .floating-bubble {
     bottom: auto !important;
     width: 100% !important;
     height: 100% !important;
+    margin: 0 !important;
+    transform: none !important;
+    max-width: none !important;
+    max-height: none !important;
+}
+
+body.is-native-app .floating-bubble {
     border-radius: 50% !important;
 }
 

@@ -186,6 +186,11 @@ html, body {
     color: #000;
 }
 
+.icon-btn.btn-close:hover, .icon-btn.btn-close:active {
+    background: #ff0055 !important;
+    color: #ffffff !important;
+}
+
 .icon-btn-text {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -529,6 +534,13 @@ html, body {
     pointer-events: auto !important;
 }
 
+body.is-native-app {
+    background: transparent !important;
+    background-color: transparent !important;
+    overflow: hidden !important;
+}
+
+body.is-native-app .floating-widget,
 body.is-native-app .floating-bubble {
     position: absolute !important;
     top: 0 !important;
@@ -537,6 +549,13 @@ body.is-native-app .floating-bubble {
     bottom: auto !important;
     width: 100% !important;
     height: 100% !important;
+    margin: 0 !important;
+    transform: none !important;
+    max-width: none !important;
+    max-height: none !important;
+}
+
+body.is-native-app .floating-bubble {
     border-radius: 50% !important;
 }
 
@@ -662,6 +681,7 @@ body.is-native-app .floating-bubble {
                 <button class="icon-btn-text" id="autoMinBtn" onclick="handleToggleAutoMin(event)">🎈 TỰ ẨN</button>
                 <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)">🔊</button>
                 <button class="icon-btn" title="Thu nhỏ bong bóng" onclick="minimizeToBubble(event)">⚊</button>
+                <button class="icon-btn btn-close" title="Đóng ứng dụng" onclick="handleCloseApp(event)" style="color: #ff5555; font-weight: bold;">✖</button>
             </div>
         </div>
 
@@ -1233,48 +1253,88 @@ function showWidget(e) {
     }
     if (floatingWidget) floatingWidget.classList.remove('hidden');
     if (floatingBubble) floatingBubble.classList.add('hidden');
+
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        const savedW = parseInt(safeStorage.getItem('openclaw_countdown_width'), 10) || 735;
+        const savedH = parseInt(safeStorage.getItem('openclaw_countdown_height'), 10) || 510;
+        const curX = parseFloat(floatingWidget.dataset.x || 15);
+        const curY = parseFloat(floatingWidget.dataset.y || 15);
+        window.AndroidBridge.updateWindowBounds(curX, curY, savedW, savedH);
+    }
 }
 
 function minimizeToBubble(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (floatingWidget) floatingWidget.classList.add('hidden');
     if (floatingBubble) floatingBubble.classList.remove('hidden');
+
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        const curX = parseFloat(floatingWidget.dataset.x || 15);
+        const curY = parseFloat(floatingWidget.dataset.y || 15);
+        window.AndroidBridge.updateWindowBounds(curX, curY, 70, 70);
+    }
+}
+
+function handleCloseApp(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (window.AndroidBridge && window.AndroidBridge.closeApp) {
+        window.AndroidBridge.closeApp();
+    } else {
+        if (floatingWidget) floatingWidget.classList.add('hidden');
+        if (floatingBubble) floatingBubble.classList.add('hidden');
+        try { window.close(); } catch(err) {}
+    }
 }
 
 // Drag and Drop Logic
 function makeDraggable(element, handleElement) {
     if (!element) return;
     const target = handleElement || element;
-    let currentX = 0, currentY = 0, initialX = 0, initialY = 0;
-    let isDragging = false, startX = 0, startY = 0, totalMoved = 0;
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+    let totalMoved = 0;
 
     const getPos = (e) => {
-        if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-        return { x: e.clientX || 0, y: e.clientY || 0 };
+        if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY, screenX: e.touches[0].screenX, screenY: e.touches[0].screenY };
+        if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY, screenX: e.changedTouches[0].screenX, screenY: e.changedTouches[0].screenY };
+        return { x: e.clientX || 0, y: e.clientY || 0, screenX: e.screenX || 0, screenY: e.screenY || 0 };
     };
 
     const dragStart = (e) => {
         if (e.target.closest('button, input, textarea, .resize-handle')) return;
         const pos = getPos(e);
-        startX = pos.x; startY = pos.y;
-        totalMoved = 0; isDragging = true;
-        currentX = parseFloat(element.dataset.x || 0);
-        currentY = parseFloat(element.dataset.y || 0);
-        initialX = startX - currentX;
-        initialY = startY - currentY;
+        lastX = pos.screenX || pos.x;
+        lastY = pos.screenY || pos.y;
+        totalMoved = 0;
+        isDragging = true;
         element.classList.add('is-dragging');
 
         const dragMove = (e) => {
             if (!isDragging) return;
             const p = getPos(e);
-            totalMoved = Math.hypot(p.x - startX, p.y - startY);
-            if (totalMoved > 5 && e.cancelable) e.preventDefault();
-            currentX = p.x - initialX;
-            currentY = p.y - initialY;
-            element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-            element.dataset.x = currentX;
-            element.dataset.y = currentY;
+            const curX = p.screenX || p.x;
+            const curY = p.screenY || p.y;
+            const dx = curX - lastX;
+            const dy = curY - lastY;
+
+            totalMoved += Math.hypot(dx, dy);
+            if (totalMoved > 3 && e.cancelable) e.preventDefault();
+
+            if (window.AndroidBridge && window.AndroidBridge.moveWindow) {
+                if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+                    window.AndroidBridge.moveWindow(Math.round(dx), Math.round(dy));
+                    lastX = curX;
+                    lastY = curY;
+                }
+            } else {
+                let currentX = (parseFloat(element.dataset.x) || 0) + dx;
+                let currentY = (parseFloat(element.dataset.y) || 0) + dy;
+                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+                element.dataset.x = currentX;
+                element.dataset.y = currentY;
+                lastX = curX;
+                lastY = curY;
+            }
         };
 
         const dragEnd = () => {
@@ -1382,6 +1442,9 @@ function makeResizable(element, handleElement) {
 
 // Init App
 function init() {
+    if (window.AndroidBridge) {
+        document.body.classList.add('is-native-app');
+    }
     getElements();
     if (audioBtn) audioBtn.textContent = audioEnabled ? '🔊' : '🔇';
     if (autoMinBtn) autoMinBtn.textContent = autoMinimizeOnComplete ? '🎈 TỰ ẨN' : '📌 GIỮ NGUYÊN';

@@ -85,11 +85,14 @@ public class FloatingService extends Service {
 
         float density = getResources().getDisplayMetrics().density;
         android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            windowManager.getDefaultDisplay().getRealMetrics(metrics);
+        }
         int screenW = metrics.widthPixels;
         int screenH = metrics.heightPixels;
 
-        int defaultWidth = Math.min(Math.round(735 * density), Math.round(screenW * 0.95f));
-        int defaultHeight = Math.min(Math.round(510 * density), Math.round(screenH * 0.95f));
+        int defaultWidth = Math.min(Math.round(735 * density), screenW);
+        int defaultHeight = Math.min(Math.round(510 * density), screenH);
         int defaultX = Math.round(15 * density);
         int defaultY = Math.round(15 * density);
 
@@ -122,13 +125,21 @@ public class FloatingService extends Service {
                 public void run() {
                     if (windowManager != null && webView != null && params != null) {
                         android.util.DisplayMetrics m = getResources().getDisplayMetrics();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                            windowManager.getDefaultDisplay().getRealMetrics(m);
+                        }
                         int sW = m.widthPixels;
                         int sH = m.heightPixels;
+                        float d = m.density;
 
-                        params.x = Math.max(0, Math.min(x, sW - 40));
-                        params.y = Math.max(0, Math.min(y, sH - 40));
-                        params.width = Math.min(Math.max(40, width), sW);
-                        params.height = Math.min(Math.max(40, height), sH);
+                        int targetW = Math.round(width * d);
+                        int targetH = Math.round(height * d);
+
+                        params.width = Math.min(Math.max(Math.round(40 * d), targetW), sW);
+                        params.height = Math.min(Math.max(Math.round(40 * d), targetH), sH);
+
+                        params.x = Math.max(0, Math.min(params.x, sW - params.width));
+                        params.y = Math.max(0, Math.min(params.y, sH - params.height));
                         try {
                             windowManager.updateViewLayout(webView, params);
                         } catch (Exception e) {
@@ -145,8 +156,15 @@ public class FloatingService extends Service {
                 @Override
                 public void run() {
                     if (windowManager != null && webView != null && params != null) {
-                        params.x = Math.max(0, params.x + dx);
-                        params.y = Math.max(0, params.y + dy);
+                        android.util.DisplayMetrics m = getResources().getDisplayMetrics();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                            windowManager.getDefaultDisplay().getRealMetrics(m);
+                        }
+                        int sW = m.widthPixels;
+                        int sH = m.heightPixels;
+
+                        params.x = Math.max(0, Math.min(params.x + dx, sW - params.width));
+                        params.y = Math.max(0, Math.min(params.y + dy, sH - params.height));
                         try {
                             windowManager.updateViewLayout(webView, params);
                         } catch (Exception e) {
