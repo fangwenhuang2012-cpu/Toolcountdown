@@ -374,6 +374,45 @@ function handleToggleAutoMin(e) {
     safeStorage.setItem('openclaw_countdown_automin', autoMinimizeOnComplete);
 }
 
+// Size Presets & Resizing Logic (+75% Default Increase)
+const SIZE_PRESETS = [
+    { w: 735, h: 510, label: "+75%" },
+    { w: 840, h: 580, label: "+100%" },
+    { w: 560, h: 390, label: "+35%" },
+    { w: 420, h: 290, label: "Gốc" }
+];
+let currentSizeIndex = 0;
+
+function applyWidgetSize(w, h, save = true) {
+    if (!floatingWidget) return;
+    const maxW = Math.min(window.innerWidth - 10, window.innerWidth);
+    const maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+
+    const targetW = Math.max(340, Math.min(maxW, w));
+    const targetH = Math.max(220, Math.min(maxH, h));
+
+    floatingWidget.style.width = targetW + 'px';
+    floatingWidget.style.height = targetH + 'px';
+
+    if (save) {
+        safeStorage.setItem('openclaw_countdown_width', targetW);
+        safeStorage.setItem('openclaw_countdown_height', targetH);
+    }
+
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        const curX = parseFloat(floatingWidget.dataset.x || 15);
+        const curY = parseFloat(floatingWidget.dataset.y || 15);
+        window.AndroidBridge.updateWindowBounds(curX, curY, Math.round(targetW), Math.round(targetH));
+    }
+}
+
+function handleToggleSize(e) {
+    if (!guardInput(e)) return;
+    currentSizeIndex = (currentSizeIndex + 1) % SIZE_PRESETS.length;
+    const preset = SIZE_PRESETS[currentSizeIndex];
+    applyWidgetSize(preset.w, preset.h, true);
+}
+
 function showWidget(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (document.pictureInPictureElement) {
@@ -403,7 +442,7 @@ function makeDraggable(element, handleElement) {
     };
 
     const dragStart = (e) => {
-        if (e.target.closest('button, input, textarea')) return;
+        if (e.target.closest('button, input, textarea, .resize-handle')) return;
         const pos = getPos(e);
         startX = pos.x; startY = pos.y;
         totalMoved = 0; isDragging = true;
@@ -445,6 +484,87 @@ function makeDraggable(element, handleElement) {
     target.addEventListener('touchstart', dragStart, { passive: false });
 }
 
+// Corner Drag-to-Resize Logic
+function makeResizable(element, handleElement) {
+    if (!element || !handleElement) return;
+    let startW = 0, startH = 0, startX = 0, startY = 0;
+    let isResizing = false;
+
+    const getPos = (e) => {
+        if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        return { x: e.clientX || 0, y: e.clientY || 0 };
+    };
+
+    const resizeStart = (e) => {
+        if (e.stopPropagation) e.stopPropagation();
+        if (e.preventDefault && e.cancelable) e.preventDefault();
+
+        const pos = getPos(e);
+        startX = pos.x;
+        startY = pos.y;
+
+        const rect = element.getBoundingClientRect();
+        startW = rect.width;
+        startH = rect.height;
+        isResizing = true;
+        element.classList.add('is-resizing');
+
+        const resizeMove = (e) => {
+            if (!isResizing) return;
+            if (e.preventDefault && e.cancelable) e.preventDefault();
+
+            const p = getPos(e);
+            const dx = p.x - startX;
+            const dy = p.y - startY;
+
+            const maxW = Math.min(window.innerWidth - 10, window.innerWidth);
+            const maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+
+            let newW = Math.max(340, Math.min(maxW, startW + dx));
+            let newH = Math.max(220, Math.min(maxH, startH + dy));
+
+            element.style.width = newW + 'px';
+            element.style.height = newH + 'px';
+
+            if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+                const curX = parseFloat(element.dataset.x || 15);
+                const curY = parseFloat(element.dataset.y || 15);
+                window.AndroidBridge.updateWindowBounds(curX, curY, Math.round(newW), Math.round(newH));
+            }
+        };
+
+        const resizeEnd = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            element.classList.remove('is-resizing');
+
+            const finalRect = element.getBoundingClientRect();
+            safeStorage.setItem('openclaw_countdown_width', Math.round(finalRect.width));
+            safeStorage.setItem('openclaw_countdown_height', Math.round(finalRect.height));
+
+            document.removeEventListener('mousemove', resizeMove);
+            document.removeEventListener('mouseup', resizeEnd);
+            document.removeEventListener('touchmove', resizeMove);
+            document.removeEventListener('touchend', resizeEnd);
+        };
+
+        document.addEventListener('mousemove', resizeMove);
+        document.addEventListener('mouseup', resizeEnd);
+        document.addEventListener('touchmove', resizeMove, { passive: false });
+        document.addEventListener('touchend', resizeEnd);
+    };
+
+    handleElement.addEventListener('mousedown', resizeStart);
+    handleElement.addEventListener('touchstart', resizeStart, { passive: false });
+
+    // Double-click corner handle resets to default (+75%: 735x510)
+    handleElement.addEventListener('dblclick', (e) => {
+        if (e.stopPropagation) e.stopPropagation();
+        applyWidgetSize(735, 510, true);
+    });
+}
+
 // Init App
 function init() {
     getElements();
@@ -466,8 +586,20 @@ function init() {
     if (statusText) statusText.textContent = "SẴN SÀNG";
     updateDisplay();
 
+    // Restore saved widget size or default to 735x510 (+75%)
+    const savedW = parseInt(safeStorage.getItem('openclaw_countdown_width'), 10);
+    const savedH = parseInt(safeStorage.getItem('openclaw_countdown_height'), 10);
+    if (!isNaN(savedW) && !isNaN(savedH) && savedW >= 340 && savedH >= 220) {
+        applyWidgetSize(savedW, savedH, false);
+    } else {
+        applyWidgetSize(735, 510, false);
+    }
+
     makeDraggable(floatingWidget, widgetHeader);
     makeDraggable(floatingBubble, null);
+
+    const resizeHandle = document.getElementById('resizeHandle');
+    if (resizeHandle) makeResizable(floatingWidget, resizeHandle);
 
     initPiPElements();
 }

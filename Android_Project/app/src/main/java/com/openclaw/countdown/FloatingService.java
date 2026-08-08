@@ -88,8 +88,8 @@ public class FloatingService extends Service {
         int screenW = metrics.widthPixels;
         int screenH = metrics.heightPixels;
 
-        int defaultWidth = Math.min(Math.round(420 * density), Math.round(screenW * 0.85f));
-        int defaultHeight = Math.min(Math.round(290 * density), Math.round(screenH * 0.85f));
+        int defaultWidth = Math.min(Math.round(735 * density), Math.round(screenW * 0.95f));
+        int defaultHeight = Math.min(Math.round(510 * density), Math.round(screenH * 0.95f));
         int defaultX = Math.round(15 * density);
         int defaultY = Math.round(15 * density);
 

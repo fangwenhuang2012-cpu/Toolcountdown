@@ -61,13 +61,13 @@ html, body {
     display: none !important;
 }
 
-/* DRAGGABLE FLOATING POPUP WIDGET - COMPACT FOR CAR ANDROID BOX SCREENS */
+/* DRAGGABLE & RESIZABLE POPUP WIDGET */
 .floating-widget {
     position: fixed;
     top: 10px;
     left: 15px;
-    width: min(420px, calc(100vw - 12px));
-    height: min(290px, calc(100vh - 12px));
+    width: min(735px, calc(100vw - 12px));
+    height: min(510px, calc(100vh - 12px));
     max-height: calc(100vh - 12px);
     background: rgba(15, 23, 42, var(--bg-opacity, 0.75));
     backdrop-filter: blur(14px);
@@ -85,6 +85,7 @@ html, body {
 }
 
 .floating-widget.is-dragging,
+.floating-widget.is-resizing,
 .floating-bubble.is-dragging {
     transition: none !important;
     box-shadow: 0 25px 45px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 243, 255, 0.4);
@@ -197,7 +198,7 @@ html, body {
 .widget-body {
     padding: 0.7rem 0.8rem;
     display: grid !important;
-    grid-template-columns: minmax(160px, 195px) 1fr !important;
+    grid-template-columns: minmax(180px, 34%) 1fr !important;
     gap: 0.75rem;
     align-items: stretch !important;
     overflow: hidden;
@@ -233,7 +234,7 @@ html, body {
 }
 
 .status-indicator {
-    font-size: 0.75rem;
+    font-size: clamp(0.75rem, 2vh, 1.05rem);
     font-weight: 800;
     letter-spacing: 1px;
     color: var(--primary);
@@ -261,7 +262,7 @@ html, body {
 
 .digital-display {
     font-family: var(--digital-font), 'Courier New', Courier, monospace;
-    font-size: clamp(2.8rem, 8vw, 4.8rem);
+    font-size: clamp(3.2rem, 12vh, 6.8rem);
     font-weight: 900;
     line-height: 1;
     color: var(--primary);
@@ -584,10 +585,42 @@ body.is-native-app .floating-bubble {
         padding: 0.4rem 0.1rem !important;
     }
 
-    .preset-chip {
-        font-size: 0.68rem !important;
-        padding: 0.3rem 0.05rem !important;
-    }
+/* RESIZE HANDLE - CORNER GRIP FOR TOUCH & MOUSE */
+.resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+    cursor: se-resize;
+    touch-action: none;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.75;
+    transition: opacity 0.2s, transform 0.15s;
+    user-select: none;
 }
+
+.resize-handle:hover,
+.resize-handle:active {
+    opacity: 1;
+    transform: scale(1.15);
+}
+
+.resize-handle::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 12px;
+    height: 12px;
+    border-right: 2.5px solid var(--primary);
+    border-bottom: 2.5px solid var(--primary);
+    box-shadow: -3px -3px 0 -1px rgba(0, 243, 255, 0.5);
+    border-radius: 0 0 3px 0;
+}
+
 
 

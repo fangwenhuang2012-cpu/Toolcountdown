@@ -31,6 +31,7 @@
                 <span class="widget-title" id="widgetTitle">ĐẾM NGƯỢC POPUP</span>
             </div>
             <div class="widget-controls">
+                <button class="icon-btn-text" id="sizeToggleBtn" onclick="handleToggleSize(event)" title="Đổi cỡ nhanh (+75% / +100% / Tự kéo)">📐 CỠ TOOL</button>
                 <button class="icon-btn-text" id="pipBtn" onclick="togglePiP(event)" style="background: rgba(0, 243, 255, 0.22); border-color: var(--primary); color: var(--primary); font-weight: 900;" title="Mở cửa sổ nổi PiP (Không cần xin quyền Android)">📺 CỬA SỔ NỔI</button>
                 <button class="icon-btn-text" id="autoMinBtn" onclick="handleToggleAutoMin(event)">🎈 TỰ ẨN</button>
                 <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)">🔊</button>
@@ -86,6 +87,8 @@
                 </div>
             </div>
         </div>
+        <!-- CORNER RESIZE HANDLE -->
+        <div class="resize-handle" id="resizeHandle" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)"></div>
     </div>
 
     <!-- MINIMIZED BUBBLE -->
