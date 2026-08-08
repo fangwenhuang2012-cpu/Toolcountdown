@@ -585,42 +585,38 @@ body.is-native-app .floating-bubble {
         padding: 0.4rem 0.1rem !important;
     }
 
-/* RESIZE HANDLE - CORNER GRIP FOR TOUCH & MOUSE */
+/* PROMINENT TOUCH-FRIENDLY CORNER RESIZE HANDLE */
 .resize-handle {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
     cursor: se-resize;
     touch-action: none;
     z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.75;
-    transition: opacity 0.2s, transform 0.15s;
+    background: rgba(0, 243, 255, 0.18);
+    border-top-left-radius: 14px;
+    border-bottom-right-radius: 16px;
+    border-left: 1.5px solid rgba(0, 243, 255, 0.5);
+    border-top: 1.5px solid rgba(0, 243, 255, 0.5);
+    color: var(--primary);
+    box-shadow: -2px -2px 12px rgba(0, 243, 255, 0.3);
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s, color 0.15s;
     user-select: none;
 }
 
 .resize-handle:hover,
 .resize-handle:active {
-    opacity: 1;
-    transform: scale(1.15);
+    background: rgba(0, 243, 255, 0.4);
+    color: #ffffff;
+    transform: scale(1.1);
+    box-shadow: -2px -2px 18px rgba(0, 243, 255, 0.7);
 }
 
-.resize-handle::after {
-    content: '';
-    position: absolute;
-    bottom: 5px;
-    right: 5px;
-    width: 12px;
-    height: 12px;
-    border-right: 2.5px solid var(--primary);
-    border-bottom: 2.5px solid var(--primary);
-    box-shadow: -3px -3px 0 -1px rgba(0, 243, 255, 0.5);
-    border-radius: 0 0 3px 0;
-}
 
 
 
