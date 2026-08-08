@@ -1217,8 +1217,14 @@ let currentSizeIndex = 0;
 
 function applyWidgetSize(w, h, save = true) {
     if (!floatingWidget) return;
-    const maxW = Math.min(window.innerWidth - 10, window.innerWidth);
-    const maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+    let maxW, maxH;
+    if (window.AndroidBridge) {
+        maxW = Math.max(window.screen.width || 0, window.screen.availWidth || 0, 1920);
+        maxH = Math.max(window.screen.height || 0, window.screen.availHeight || 0, 1080);
+    } else {
+        maxW = Math.min(window.innerWidth - 10, window.innerWidth);
+        maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+    }
 
     const targetW = Math.max(340, Math.min(maxW, w));
     const targetH = Math.max(220, Math.min(maxH, h));
@@ -1364,9 +1370,9 @@ function makeResizable(element, handleElement) {
     let isResizing = false;
 
     const getPos = (e) => {
-        if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-        return { x: e.clientX || 0, y: e.clientY || 0 };
+        if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY, screenX: e.touches[0].screenX, screenY: e.touches[0].screenY };
+        if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY, screenX: e.changedTouches[0].screenX, screenY: e.changedTouches[0].screenY };
+        return { x: e.clientX || 0, y: e.clientY || 0, screenX: e.screenX || 0, screenY: e.screenY || 0 };
     };
 
     const resizeStart = (e) => {
@@ -1374,8 +1380,8 @@ function makeResizable(element, handleElement) {
         if (e.preventDefault && e.cancelable) e.preventDefault();
 
         const pos = getPos(e);
-        startX = pos.x;
-        startY = pos.y;
+        startX = pos.screenX || pos.x;
+        startY = pos.screenY || pos.y;
 
         const rect = element.getBoundingClientRect();
         startW = rect.width;
@@ -1388,11 +1394,19 @@ function makeResizable(element, handleElement) {
             if (e.preventDefault && e.cancelable) e.preventDefault();
 
             const p = getPos(e);
-            const dx = p.x - startX;
-            const dy = p.y - startY;
+            const curX = p.screenX || p.x;
+            const curY = p.screenY || p.y;
+            const dx = curX - startX;
+            const dy = curY - startY;
 
-            const maxW = Math.min(window.innerWidth - 10, window.innerWidth);
-            const maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+            let maxW, maxH;
+            if (window.AndroidBridge) {
+                maxW = Math.max(window.screen.width || 0, window.screen.availWidth || 0, 1920);
+                maxH = Math.max(window.screen.height || 0, window.screen.availHeight || 0, 1080);
+            } else {
+                maxW = Math.min(window.innerWidth - 10, window.innerWidth);
+                maxH = Math.min(window.innerHeight - 10, window.innerHeight);
+            }
 
             let newW = Math.max(340, Math.min(maxW, startW + dx));
             let newH = Math.max(220, Math.min(maxH, startH + dy));
@@ -1402,9 +1416,9 @@ function makeResizable(element, handleElement) {
             updateDisplayFontSize();
 
             if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
-                const curX = parseFloat(element.dataset.x || 15);
-                const curY = parseFloat(element.dataset.y || 15);
-                window.AndroidBridge.updateWindowBounds(curX, curY, Math.round(newW), Math.round(newH));
+                const curXPos = parseFloat(element.dataset.x || 15);
+                const curYPos = parseFloat(element.dataset.y || 15);
+                window.AndroidBridge.updateWindowBounds(curXPos, curYPos, Math.round(newW), Math.round(newH));
             }
         };
 
