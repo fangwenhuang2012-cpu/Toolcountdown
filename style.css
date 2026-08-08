@@ -66,6 +66,7 @@ html, body {
     position: fixed;
     top: 10px;
     left: 15px;
+    transform: translate3d(0, 0, 0);
     width: min(735px, calc(100vw - 12px));
     height: min(510px, calc(100vh - 12px));
     max-height: calc(100vh - 12px);
@@ -423,10 +424,10 @@ html, body {
     color: var(--primary);
 }
 
-/* RUNNING MODE: HIDE LEFT NUMPAD & PRESETS, ENLARGE DISPLAY BY 50%+ */
+/* RUNNING MODE: HIDE LEFT NUMPAD & PRESETS, ENLARGE DISPLAY (RESIZABLE HEIGHT & WIDTH) */
 .floating-widget.running-mode {
-    width: min(520px, calc(100vw - 12px));
-    height: auto !important;
+    min-width: 320px;
+    min-height: 200px;
     max-height: calc(100vh - 12px);
 }
 
@@ -435,7 +436,8 @@ html, body {
     flex-direction: column !important;
     padding: 0.85rem 1rem !important;
     gap: 0.75rem !important;
-    height: auto !important;
+    flex: 1 !important;
+    height: calc(100% - 44px) !important;
 }
 
 .floating-widget.running-mode .body-left,
@@ -444,12 +446,19 @@ html, body {
 }
 
 .floating-widget.running-mode .digital-display {
-    font-size: clamp(5.8rem, 18vw, 9rem);
-    padding: 0.85rem 1rem;
-    min-height: 180px;
+    font-size: clamp(4.2rem, 18vh, 10rem);
+    padding: 0.75rem 1rem;
+    flex: 1 !important;
+    min-height: 120px;
     border-width: 3px;
     border-radius: 18px;
     text-shadow: 0 0 45px var(--primary-glow);
+}
+
+.floating-widget.running-mode .body-right {
+    flex: 1 !important;
+    height: 100% !important;
+    justify-content: space-between !important;
 }
 
 .floating-widget.running-mode .btn {
@@ -584,16 +593,17 @@ body.is-native-app .floating-bubble {
     }
 }
 
-/* FLUSH CORNER RESIZE HANDLE (VERY OUTER BOTTOM-RIGHT CORNER OF POPUP WIDGET) */
+/* FLUSH CORNER RESIZE HANDLE (STRICTLY FAR-RIGHT BOTTOM CORNER OF POPUP WIDGET) */
 .resize-handle {
     position: absolute !important;
+    align-self: flex-end !important;
     bottom: 0 !important;
     right: 0 !important;
     top: auto !important;
     left: auto !important;
     margin: 0 !important;
-    width: 36px !important;
-    height: 36px !important;
+    width: 44px !important;
+    height: 44px !important;
     cursor: se-resize !important;
     touch-action: none !important;
     z-index: 99999 !important;
@@ -601,22 +611,22 @@ body.is-native-app .floating-bubble {
     align-items: center !important;
     justify-content: center !important;
     background: rgba(0, 243, 255, 0.28) !important;
-    border-top-left-radius: 12px !important;
+    border-top-left-radius: 16px !important;
     border-bottom-right-radius: 16px !important;
-    border-left: 1.5px solid rgba(0, 243, 255, 0.6) !important;
-    border-top: 1.5px solid rgba(0, 243, 255, 0.6) !important;
+    border-left: 2px solid rgba(0, 243, 255, 0.7) !important;
+    border-top: 2px solid rgba(0, 243, 255, 0.7) !important;
     color: #00f3ff !important;
-    box-shadow: -2px -2px 14px rgba(0, 243, 255, 0.4) !important;
+    box-shadow: -3px -3px 18px rgba(0, 243, 255, 0.5) !important;
     transition: background 0.2s, transform 0.15s, box-shadow 0.2s, color 0.15s !important;
     user-select: none !important;
 }
 
 .resize-handle:hover,
 .resize-handle:active {
-    background: rgba(0, 243, 255, 0.5) !important;
+    background: rgba(0, 243, 255, 0.55) !important;
     color: #ffffff !important;
-    transform: scale(1.08) !important;
-    box-shadow: -2px -2px 20px rgba(0, 243, 255, 0.75) !important;
+    transform: scale(1.1) !important;
+    box-shadow: -3px -3px 25px rgba(0, 243, 255, 0.85) !important;
 }
 
 

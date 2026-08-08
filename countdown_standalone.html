@@ -80,6 +80,7 @@ html, body {
     position: fixed;
     top: 10px;
     left: 15px;
+    transform: translate3d(0, 0, 0);
     width: min(735px, calc(100vw - 12px));
     height: min(510px, calc(100vh - 12px));
     max-height: calc(100vh - 12px);
@@ -437,10 +438,10 @@ html, body {
     color: var(--primary);
 }
 
-/* RUNNING MODE: HIDE LEFT NUMPAD & PRESETS, ENLARGE DISPLAY BY 50%+ */
+/* RUNNING MODE: HIDE LEFT NUMPAD & PRESETS, ENLARGE DISPLAY (RESIZABLE HEIGHT & WIDTH) */
 .floating-widget.running-mode {
-    width: min(520px, calc(100vw - 12px));
-    height: auto !important;
+    min-width: 320px;
+    min-height: 200px;
     max-height: calc(100vh - 12px);
 }
 
@@ -449,7 +450,8 @@ html, body {
     flex-direction: column !important;
     padding: 0.85rem 1rem !important;
     gap: 0.75rem !important;
-    height: auto !important;
+    flex: 1 !important;
+    height: calc(100% - 44px) !important;
 }
 
 .floating-widget.running-mode .body-left,
@@ -458,12 +460,19 @@ html, body {
 }
 
 .floating-widget.running-mode .digital-display {
-    font-size: clamp(5.8rem, 18vw, 9rem);
-    padding: 0.85rem 1rem;
-    min-height: 180px;
+    font-size: clamp(4.2rem, 18vh, 10rem);
+    padding: 0.75rem 1rem;
+    flex: 1 !important;
+    min-height: 120px;
     border-width: 3px;
     border-radius: 18px;
     text-shadow: 0 0 45px var(--primary-glow);
+}
+
+.floating-widget.running-mode .body-right {
+    flex: 1 !important;
+    height: 100% !important;
+    justify-content: space-between !important;
 }
 
 .floating-widget.running-mode .btn {
@@ -598,16 +607,17 @@ body.is-native-app .floating-bubble {
     }
 }
 
-/* FLUSH CORNER RESIZE HANDLE (VERY OUTER BOTTOM-RIGHT CORNER OF POPUP WIDGET) */
+/* FLUSH CORNER RESIZE HANDLE (STRICTLY FAR-RIGHT BOTTOM CORNER OF POPUP WIDGET) */
 .resize-handle {
     position: absolute !important;
+    align-self: flex-end !important;
     bottom: 0 !important;
     right: 0 !important;
     top: auto !important;
     left: auto !important;
     margin: 0 !important;
-    width: 36px !important;
-    height: 36px !important;
+    width: 44px !important;
+    height: 44px !important;
     cursor: se-resize !important;
     touch-action: none !important;
     z-index: 99999 !important;
@@ -615,22 +625,22 @@ body.is-native-app .floating-bubble {
     align-items: center !important;
     justify-content: center !important;
     background: rgba(0, 243, 255, 0.28) !important;
-    border-top-left-radius: 12px !important;
+    border-top-left-radius: 16px !important;
     border-bottom-right-radius: 16px !important;
-    border-left: 1.5px solid rgba(0, 243, 255, 0.6) !important;
-    border-top: 1.5px solid rgba(0, 243, 255, 0.6) !important;
+    border-left: 2px solid rgba(0, 243, 255, 0.7) !important;
+    border-top: 2px solid rgba(0, 243, 255, 0.7) !important;
     color: #00f3ff !important;
-    box-shadow: -2px -2px 14px rgba(0, 243, 255, 0.4) !important;
+    box-shadow: -3px -3px 18px rgba(0, 243, 255, 0.5) !important;
     transition: background 0.2s, transform 0.15s, box-shadow 0.2s, color 0.15s !important;
     user-select: none !important;
 }
 
 .resize-handle:hover,
 .resize-handle:active {
-    background: rgba(0, 243, 255, 0.5) !important;
+    background: rgba(0, 243, 255, 0.55) !important;
     color: #ffffff !important;
-    transform: scale(1.08) !important;
-    box-shadow: -2px -2px 20px rgba(0, 243, 255, 0.75) !important;
+    transform: scale(1.1) !important;
+    box-shadow: -3px -3px 25px rgba(0, 243, 255, 0.85) !important;
 }
 
 
@@ -703,13 +713,12 @@ body.is-native-app .floating-bubble {
                 </div>
             </div>
         </div>
-        <!-- FLUSH CORNER RESIZE HANDLE (VERY BOTTOM-RIGHT CORNER OF POPUP) -->
-        <div class="resize-handle" id="resizeHandle" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 21 21 21 21 15"></polyline>
-                <polyline points="9 3 3 3 3 9"></polyline>
-                <line x1="21" y1="21" x2="14" y2="14"></line>
-                <line x1="3" y1="3" x2="10" y2="10"></line>
+        <!-- FLUSH CORNER RESIZE HANDLE (3 DIAGONAL SLASH GRIP LINES) -->
+        <div class="resize-handle" id="resizeHandle" style="position: absolute !important; right: 0px !important; bottom: 0px !important; left: auto !important; top: auto !important; z-index: 99999 !important;" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="19" y1="9" x2="9" y2="19"></line>
+                <line x1="19" y1="13" x2="13" y2="19"></line>
+                <line x1="19" y1="17" x2="17" y2="19"></line>
             </svg>
         </div>
     </div>
@@ -761,6 +770,13 @@ let lastInputGuardTime = 0;
 
 // Input Debounce Guard (100ms throttle, zero blocking)
 function guardInput(e) {
+    if (audioEnabled) {
+        try {
+            const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+            if (!audioCtx && AudioCtxClass) audioCtx = new AudioCtxClass();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        } catch(err) {}
+    }
     const now = Date.now();
     if (now - lastInputGuardTime < 100) return false;
     lastInputGuardTime = now;
@@ -776,32 +792,77 @@ function playBeep(freq = 1200, duration = 0.1, type = 'sine', volume = 0.6) {
             audioCtx = new AudioCtxClass();
         }
         if (audioCtx) {
+            const executeSingleBeep = () => {
+                const now = audioCtx.currentTime + 0.02;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start(now);
+                osc.stop(now + duration);
+            };
+
             if (audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(() => {});
+                audioCtx.resume().then(executeSingleBeep).catch(executeSingleBeep);
+            } else {
+                executeSingleBeep();
             }
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, now);
-            
-            gain.gain.setValueAtTime(volume, now);
-            gain.gain.linearRampToValueAtTime(0.001, now + duration);
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            
-            osc.start(now);
-            osc.stop(now + duration);
         }
     } catch(e) {}
 }
 
-// Mốc 30s, 20s, 10s -> Kêu 2 tiếng liên tiếp!
+// Mốc 30s, 20s, 10s -> Kêu 2 tiếng liên tiếp ("TÍT - TÍT") chuẩn 100%!
 function playDoubleTing() {
-    playBeep(1200, 0.1, 'sine', 0.65);
-    setTimeout(() => playBeep(1500, 0.12, 'sine', 0.7), 130);
+    if (!audioEnabled) return;
+    try {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx && AudioCtxClass) {
+            audioCtx = new AudioCtxClass();
+        }
+        if (audioCtx) {
+            const executeDoubleBeep = () => {
+                const now = audioCtx.currentTime + 0.03; // 30ms offset for clean scheduling
+
+                // Beep 1 (1200 Hz, 110ms)
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(1200, now);
+                gain1.gain.setValueAtTime(0.7, now);
+                gain1.gain.linearRampToValueAtTime(0.001, now + 0.11);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.11);
+
+                // Beep 2 (1500 Hz, 110ms - 220ms gap, 100% distinct 2 beeps!)
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(1500, now + 0.22);
+                gain2.gain.setValueAtTime(0.75, now + 0.22);
+                gain2.gain.linearRampToValueAtTime(0.001, now + 0.33);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start(now + 0.22);
+                osc2.stop(now + 0.33);
+            };
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(executeDoubleBeep).catch(executeDoubleBeep);
+            } else {
+                executeDoubleBeep();
+            }
+        }
+    } catch(e) {}
 }
 
 // Từ 5s trở xuống (5, 4, 3, 2, 1) -> Mỗi giây kêu 1 tiếng!
@@ -850,6 +911,31 @@ function getElements() {
     autoMinBtn = document.getElementById('autoMinBtn');
 }
 
+// Dynamic Font Scaling: Expands digital clock digits proportionally when widget is resized
+function updateDisplayFontSize() {
+    const digitalDisplay = document.getElementById('digitalDisplay');
+    if (!digitalDisplay) return;
+
+    const rect = digitalDisplay.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const paddingY = 12;
+    const paddingX = 16;
+    const availH = Math.max(30, rect.height - paddingY);
+    const availW = Math.max(50, rect.width - paddingX);
+
+    // 3 tabular digits (e.g., 080)
+    // Height limit: 76% of container height
+    // Width limit: container width divided by 3.1
+    const fontByH = availH * 0.76;
+    const fontByW = availW / 3.1;
+
+    const calcFont = Math.min(fontByH, fontByW);
+    if (calcFont > 12) {
+        digitalDisplay.style.fontSize = Math.round(calcFont) + 'px';
+    }
+}
+
 function updateDisplay() {
     const formatted = String(countdownTime).padStart(3, '0');
     const digits = formatted.slice(-3);
@@ -862,6 +948,7 @@ function updateDisplay() {
     if (startBtn) startBtn.disabled = isRunning || countdownTime <= 0;
     if (pauseBtn) pauseBtn.disabled = !isRunning;
 
+    updateDisplayFontSize();
     renderPiPCanvas();
 }
 
@@ -1118,6 +1205,7 @@ function applyWidgetSize(w, h, save = true) {
 
     floatingWidget.style.width = targetW + 'px';
     floatingWidget.style.height = targetH + 'px';
+    updateDisplayFontSize();
 
     if (save) {
         safeStorage.setItem('openclaw_countdown_width', targetW);
@@ -1251,6 +1339,7 @@ function makeResizable(element, handleElement) {
 
             element.style.width = newW + 'px';
             element.style.height = newH + 'px';
+            updateDisplayFontSize();
 
             if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
                 const curX = parseFloat(element.dataset.x || 15);
@@ -1267,6 +1356,7 @@ function makeResizable(element, handleElement) {
             const finalRect = element.getBoundingClientRect();
             safeStorage.setItem('openclaw_countdown_width', Math.round(finalRect.width));
             safeStorage.setItem('openclaw_countdown_height', Math.round(finalRect.height));
+            updateDisplayFontSize();
 
             document.removeEventListener('mousemove', resizeMove);
             document.removeEventListener('mouseup', resizeEnd);
@@ -1325,6 +1415,9 @@ function init() {
 
     const resizeHandle = document.getElementById('resizeHandle');
     if (resizeHandle) makeResizable(floatingWidget, resizeHandle);
+
+    window.addEventListener('resize', updateDisplayFontSize);
+    setTimeout(updateDisplayFontSize, 100);
 
     initPiPElements();
 }

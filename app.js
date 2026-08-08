@@ -36,6 +36,13 @@ let lastInputGuardTime = 0;
 
 // Input Debounce Guard (100ms throttle, zero blocking)
 function guardInput(e) {
+    if (audioEnabled) {
+        try {
+            const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+            if (!audioCtx && AudioCtxClass) audioCtx = new AudioCtxClass();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        } catch(err) {}
+    }
     const now = Date.now();
     if (now - lastInputGuardTime < 100) return false;
     lastInputGuardTime = now;
@@ -51,32 +58,77 @@ function playBeep(freq = 1200, duration = 0.1, type = 'sine', volume = 0.6) {
             audioCtx = new AudioCtxClass();
         }
         if (audioCtx) {
+            const executeSingleBeep = () => {
+                const now = audioCtx.currentTime + 0.02;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start(now);
+                osc.stop(now + duration);
+            };
+
             if (audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(() => {});
+                audioCtx.resume().then(executeSingleBeep).catch(executeSingleBeep);
+            } else {
+                executeSingleBeep();
             }
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, now);
-            
-            gain.gain.setValueAtTime(volume, now);
-            gain.gain.linearRampToValueAtTime(0.001, now + duration);
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            
-            osc.start(now);
-            osc.stop(now + duration);
         }
     } catch(e) {}
 }
 
-// Mốc 30s, 20s, 10s -> Kêu 2 tiếng liên tiếp!
+// Mốc 30s, 20s, 10s -> Kêu 2 tiếng liên tiếp ("TÍT - TÍT") chuẩn 100%!
 function playDoubleTing() {
-    playBeep(1200, 0.1, 'sine', 0.65);
-    setTimeout(() => playBeep(1500, 0.12, 'sine', 0.7), 130);
+    if (!audioEnabled) return;
+    try {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx && AudioCtxClass) {
+            audioCtx = new AudioCtxClass();
+        }
+        if (audioCtx) {
+            const executeDoubleBeep = () => {
+                const now = audioCtx.currentTime + 0.03; // 30ms offset for clean scheduling
+
+                // Beep 1 (1200 Hz, 110ms)
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(1200, now);
+                gain1.gain.setValueAtTime(0.7, now);
+                gain1.gain.linearRampToValueAtTime(0.001, now + 0.11);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.11);
+
+                // Beep 2 (1500 Hz, 110ms - 220ms gap, 100% distinct 2 beeps!)
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(1500, now + 0.22);
+                gain2.gain.setValueAtTime(0.75, now + 0.22);
+                gain2.gain.linearRampToValueAtTime(0.001, now + 0.33);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start(now + 0.22);
+                osc2.stop(now + 0.33);
+            };
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(executeDoubleBeep).catch(executeDoubleBeep);
+            } else {
+                executeDoubleBeep();
+            }
+        }
+    } catch(e) {}
 }
 
 // Từ 5s trở xuống (5, 4, 3, 2, 1) -> Mỗi giây kêu 1 tiếng!
@@ -125,6 +177,31 @@ function getElements() {
     autoMinBtn = document.getElementById('autoMinBtn');
 }
 
+// Dynamic Font Scaling: Expands digital clock digits proportionally when widget is resized
+function updateDisplayFontSize() {
+    const digitalDisplay = document.getElementById('digitalDisplay');
+    if (!digitalDisplay) return;
+
+    const rect = digitalDisplay.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const paddingY = 12;
+    const paddingX = 16;
+    const availH = Math.max(30, rect.height - paddingY);
+    const availW = Math.max(50, rect.width - paddingX);
+
+    // 3 tabular digits (e.g., 080)
+    // Height limit: 76% of container height
+    // Width limit: container width divided by 3.1
+    const fontByH = availH * 0.76;
+    const fontByW = availW / 3.1;
+
+    const calcFont = Math.min(fontByH, fontByW);
+    if (calcFont > 12) {
+        digitalDisplay.style.fontSize = Math.round(calcFont) + 'px';
+    }
+}
+
 function updateDisplay() {
     const formatted = String(countdownTime).padStart(3, '0');
     const digits = formatted.slice(-3);
@@ -137,6 +214,7 @@ function updateDisplay() {
     if (startBtn) startBtn.disabled = isRunning || countdownTime <= 0;
     if (pauseBtn) pauseBtn.disabled = !isRunning;
 
+    updateDisplayFontSize();
     renderPiPCanvas();
 }
 
@@ -393,6 +471,7 @@ function applyWidgetSize(w, h, save = true) {
 
     floatingWidget.style.width = targetW + 'px';
     floatingWidget.style.height = targetH + 'px';
+    updateDisplayFontSize();
 
     if (save) {
         safeStorage.setItem('openclaw_countdown_width', targetW);
@@ -526,6 +605,7 @@ function makeResizable(element, handleElement) {
 
             element.style.width = newW + 'px';
             element.style.height = newH + 'px';
+            updateDisplayFontSize();
 
             if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
                 const curX = parseFloat(element.dataset.x || 15);
@@ -542,6 +622,7 @@ function makeResizable(element, handleElement) {
             const finalRect = element.getBoundingClientRect();
             safeStorage.setItem('openclaw_countdown_width', Math.round(finalRect.width));
             safeStorage.setItem('openclaw_countdown_height', Math.round(finalRect.height));
+            updateDisplayFontSize();
 
             document.removeEventListener('mousemove', resizeMove);
             document.removeEventListener('mouseup', resizeEnd);
@@ -600,6 +681,9 @@ function init() {
 
     const resizeHandle = document.getElementById('resizeHandle');
     if (resizeHandle) makeResizable(floatingWidget, resizeHandle);
+
+    window.addEventListener('resize', updateDisplayFontSize);
+    setTimeout(updateDisplayFontSize, 100);
 
     initPiPElements();
 }
