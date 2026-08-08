@@ -584,7 +584,7 @@ body.is-native-app .floating-bubble {
     }
 }
 
-/* PROMINENT CORNER RESIZE HANDLE (STRICTLY ANCHORED AT BOTTOM-RIGHT CORNER) */
+/* FLUSH CORNER RESIZE HANDLE (VERY OUTER BOTTOM-RIGHT CORNER OF POPUP WIDGET) */
 .resize-handle {
     position: absolute !important;
     bottom: 0 !important;
@@ -592,8 +592,8 @@ body.is-native-app .floating-bubble {
     top: auto !important;
     left: auto !important;
     margin: 0 !important;
-    width: 48px !important;
-    height: 48px !important;
+    width: 36px !important;
+    height: 36px !important;
     cursor: se-resize !important;
     touch-action: none !important;
     z-index: 99999 !important;
@@ -601,22 +601,22 @@ body.is-native-app .floating-bubble {
     align-items: center !important;
     justify-content: center !important;
     background: rgba(0, 243, 255, 0.28) !important;
-    border-top-left-radius: 16px !important;
+    border-top-left-radius: 12px !important;
     border-bottom-right-radius: 16px !important;
-    border-left: 2px solid rgba(0, 243, 255, 0.7) !important;
-    border-top: 2px solid rgba(0, 243, 255, 0.7) !important;
+    border-left: 1.5px solid rgba(0, 243, 255, 0.6) !important;
+    border-top: 1.5px solid rgba(0, 243, 255, 0.6) !important;
     color: #00f3ff !important;
-    box-shadow: -3px -3px 18px rgba(0, 243, 255, 0.5) !important;
+    box-shadow: -2px -2px 14px rgba(0, 243, 255, 0.4) !important;
     transition: background 0.2s, transform 0.15s, box-shadow 0.2s, color 0.15s !important;
     user-select: none !important;
 }
 
 .resize-handle:hover,
 .resize-handle:active {
-    background: rgba(0, 243, 255, 0.55) !important;
+    background: rgba(0, 243, 255, 0.5) !important;
     color: #ffffff !important;
-    transform: scale(1.1) !important;
-    box-shadow: -3px -3px 25px rgba(0, 243, 255, 0.85) !important;
+    transform: scale(1.08) !important;
+    box-shadow: -2px -2px 20px rgba(0, 243, 255, 0.75) !important;
 }
 
 
