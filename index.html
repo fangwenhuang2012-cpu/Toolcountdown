@@ -14,15 +14,6 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- LIVE PC PREVIEW HEADER WITH APP LAUNCHER ICON -->
-    <div class="pc-preview-header" style="position: fixed; top: 15px; right: 20px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); padding: 8px 14px; border-radius: 14px; border: 1px solid rgba(0, 243, 255, 0.35); pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-        <img src="icon.png" style="width: 36px; height: 36px; border-radius: 10px; box-shadow: 0 0 12px rgba(0, 243, 255, 0.4); border: 1px solid #00f3ff; vertical-align: middle;" alt="Icon App Android">
-        <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 0.8rem; font-weight: 800; color: #00f3ff; letter-spacing: 0.5px;">APP ICON & WIDGET DEMO</span>
-            <span style="font-size: 0.68rem; color: #94a3b8;">Click "📺 CỬA SỔ NỔI" để bật PiP trên PC</span>
-        </div>
-    </div>
-
     <!-- MAIN FLOATING POPUP WIDGET -->
     <div class="floating-widget" id="floatingWidget">
         <div class="widget-header" id="widgetHeader">
@@ -32,7 +23,6 @@
             </div>
             <div class="widget-controls">
                 <button class="icon-btn-text" id="sizeToggleBtn" onclick="handleToggleSize(event)" title="Đổi cỡ nhanh (+75% / +100% / Tự kéo)">📐 CỠ TOOL</button>
-                <button class="icon-btn-text" id="pipBtn" onclick="togglePiP(event)" style="background: rgba(0, 243, 255, 0.22); border-color: var(--primary); color: var(--primary); font-weight: 900;" title="Mở cửa sổ nổi PiP (Không cần xin quyền Android)">📺 CỬA SỔ NỔI</button>
                 <button class="icon-btn-text" id="autoMinBtn" onclick="handleToggleAutoMin(event)">🎈 TỰ ẨN</button>
                 <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)">🔊</button>
                 <button class="icon-btn" title="Thu nhỏ bong bóng" onclick="minimizeToBubble(event)">⚊</button>
