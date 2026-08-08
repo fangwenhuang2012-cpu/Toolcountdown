@@ -235,6 +235,7 @@ html, body {
 
 /* PHÍA BÊN PHẢI: ĐỒNG HỒ & ĐIỀU KHIỂN (ALWAYS ORDER 2 ON THE RIGHT) */
 .body-right {
+    position: relative !important;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -244,7 +245,7 @@ html, body {
     height: 100%;
     order: 2 !important;
     min-width: 0 !important;
-    overflow: hidden;
+    overflow: visible !important;
 }
 
 .status-indicator {
@@ -700,16 +701,17 @@ body.is-native-app .floating-bubble {
                     <button class="preset-chip" onclick="handlePreset(100, event)">100s</button>
                     <button class="preset-chip" onclick="handlePreset(120, event)">120s</button>
                 </div>
+
+                <!-- PROMINENT CORNER RESIZE HANDLE (STRICTLY IN BOTTOM-RIGHT OF RIGHT PANEL) -->
+                <div class="resize-handle" id="resizeHandle" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 21 21 21 21 15"></polyline>
+                        <polyline points="9 3 3 3 3 9"></polyline>
+                        <line x1="21" y1="21" x2="14" y2="14"></line>
+                        <line x1="3" y1="3" x2="10" y2="10"></line>
+                    </svg>
+                </div>
             </div>
-        </div>
-        <!-- PROMINENT CORNER RESIZE HANDLE (BOTTOM-RIGHT) -->
-        <div class="resize-handle" id="resizeHandle" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 21 21 21 21 15"></polyline>
-                <polyline points="9 3 3 3 3 9"></polyline>
-                <line x1="21" y1="21" x2="14" y2="14"></line>
-                <line x1="3" y1="3" x2="10" y2="10"></line>
-            </svg>
         </div>
     </div>
 
