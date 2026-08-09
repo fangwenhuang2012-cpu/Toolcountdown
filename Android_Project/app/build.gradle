@@ -20,6 +20,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "Tool_AndroidBox_AI_VietMap_Camera_HUD.apk"
+        }
+    }
 }
 
 dependencies {

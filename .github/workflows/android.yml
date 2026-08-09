@@ -30,7 +30,6 @@ jobs:
       run: |
         cd Android_Project
         gradle assembleDebug
-        mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Tool_AndroidBox_AI_VietMap_Camera_HUD.apk
 
     - name: Upload AI VietMap Camera HUD APK Artifact
       uses: actions/upload-artifact@v4
