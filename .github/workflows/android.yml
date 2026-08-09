@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build AI VietMap Camera HUD APK
 
 on:
   push:
@@ -26,13 +26,14 @@ jobs:
       with:
         gradle-version: '8.2'
 
-    - name: Build Debug APK
+    - name: Build APK
       run: |
         cd Android_Project
         gradle assembleDebug
+        mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Tool_AndroidBox_AI_VietMap_Camera_HUD.apk
 
-    - name: Upload Debug APK Artifact
+    - name: Upload AI VietMap Camera HUD APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: DigitalCountdown-APK
-        path: Android_Project/app/build/outputs/apk/debug/app-debug.apk
+        name: Tool_AndroidBox_AI_VietMap_RedLight_Camera
+        path: Android_Project/app/build/outputs/apk/debug/Tool_AndroidBox_AI_VietMap_Camera_HUD.apk
