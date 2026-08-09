@@ -11,8 +11,8 @@ import android.util.Log;
 
 public class VehicleSpeedMonitor {
     private static final String TAG = "VehicleSpeedMonitor";
-    private static final float STOP_SPEED_THRESHOLD_KMH = 1.0f; // km/h
-    private static final float MOVE_SPEED_THRESHOLD_KMH = 2.5f; // km/h
+    private static final float STOP_SPEED_THRESHOLD_KMH = 5.0f; // km/h (cho phép nhích nhẹ dưới 5km/h tại đèn đỏ)
+    private static final float MOVE_SPEED_THRESHOLD_KMH = 8.0f; // km/h (chỉ ẩn khi xe tăng tốc trên 8km/h)
     private static final long STOP_CONFIRM_DELAY_MS = 1500; // 1.5 seconds stop confirmation
 
     public interface SpeedListener {

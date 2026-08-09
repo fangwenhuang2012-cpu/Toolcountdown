@@ -308,7 +308,10 @@ if (document.readyState === 'loading') {
 }
 
 window.setCameraCountdown = function(seconds) {
-    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 99) return;
+    if (typeof seconds !== 'number' || seconds < 10 || seconds > 99) {
+        console.log("[VietMap AI HUD] Ignored initial countdown < 10s or invalid:", seconds);
+        return;
+    }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
 
     countdownTime = seconds;

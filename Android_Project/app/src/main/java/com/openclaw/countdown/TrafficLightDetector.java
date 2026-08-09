@@ -42,7 +42,8 @@ public class TrafficLightDetector {
 
             // 2. OCR Countdown Digit Recognition
             int seconds = detectCountdownSeconds(frame);
-            if (seconds > 0 && seconds <= 99) {
+            // Chỉ nhận diện các mốc đếm ngược từ 10s trở lên (bỏ qua mốc ban đầu dưới 10s để tránh làm phiền)
+            if (seconds >= 10 && seconds <= 99) {
                 if (seconds == lastDetectedSeconds - 1 || lastDetectedSeconds == -1) {
                     consecutiveMatches++;
                     lastDetectedSeconds = seconds;

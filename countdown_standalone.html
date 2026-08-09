@@ -459,15 +459,14 @@ html, body {
 
     <!-- BẢNG GIẢ LẬP NÚT BẤM DÙNG THỬ DỄ DÀNG -->
     <div class="demo-tester-bar">
-        <div class="demo-title">🎮 BẤM NÚT DÙNG THỬ (>10S BLUE | 10S-6S YELLOW | 5S-1S RED | 0S GREEN)</div>
+        <div class="demo-title">🎮 BẤM NÚT DÙNG THỬ (CHỈ BẬT TOOL KHI ĐẾM BAN ĐẦU ≥ 10S | TỐC ĐỘ DỪNG ≤ 5KM/H, ẨN > 8KM/H)</div>
         <div class="demo-btn-group">
-            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(35)">🔵 Đèn đỏ 35s (>10s Số Xanh Blue)</button>
-            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(30)">🔵 30s (Tik-Tik)</button>
-            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(20)">🔵 20s (Tik-Tik)</button>
-            <button class="demo-btn btn-yellow" onclick="window.setCameraCountdown(10)">🟡 10s (Số Vàng, Tik-Tik)</button>
-            <button class="demo-btn btn-red" onclick="window.setCameraCountdown(5)">🔴 5s (Số Đỏ, Tik 1s)</button>
-            <button class="demo-btn btn-green" onclick="window.onRedLightEnded()">🟢 Đèn Xanh 0s (Số Xanh Green)</button>
-            <button class="demo-btn btn-blue" onclick="window.onVehicleMoved()">🚗 Xe Chạy (Ẩn Tool)</button>
+            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(35)">🔵 35s (Bắt đầu ≥10s - Số Xanh Blue)</button>
+            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(20)">🔵 20s (Bắt đầu ≥10s - Tik-Tik)</button>
+            <button class="demo-btn btn-yellow" onclick="window.setCameraCountdown(10)">🟡 10s (Bắt đầu = 10s - Số Vàng)</button>
+            <button class="demo-btn btn-red" onclick="window.setCameraCountdown(5)">🔴 5s (Bỏ qua vì < 10s ban đầu)</button>
+            <button class="demo-btn btn-green" onclick="window.onRedLightEnded()">🟢 Đèn Xanh 0s (Nhạc hiệu)</button>
+            <button class="demo-btn btn-blue" onclick="window.onVehicleMoved()">🚗 Xe Chạy >8km/h (Ẩn Tool)</button>
         </div>
     </div>
 
@@ -768,7 +767,10 @@ if (document.readyState === 'loading') {
 }
 
 window.setCameraCountdown = function(seconds) {
-    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 99) return;
+    if (typeof seconds !== 'number' || seconds < 10 || seconds > 99) {
+        console.log("[VietMap AI HUD] Ignored initial countdown < 10s or invalid:", seconds);
+        return;
+    }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
 
     countdownTime = seconds;
