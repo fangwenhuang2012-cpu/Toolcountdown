@@ -3,84 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Floating Digital Countdown - Android Box Ô Tô</title>
+    <title>AI VietMap Camera Red Light HUD - Android Box Ô Tô</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@600;800&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon.png">
-    <link rel="apple-touch-icon" href="icon.png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- MAIN FLOATING POPUP WIDGET -->
-    <div class="floating-widget" id="floatingWidget">
+    <!-- AI VIETMAP HUD FLOATING OVERLAY -->
+    <div class="floating-widget theme-blue" id="floatingWidget">
+        <!-- TOP HEADER HUD BAR -->
         <div class="widget-header" id="widgetHeader">
-            <div class="drag-handle" title="Chạm giữ để kéo di chuyển trên màn hình ô tô">
-                <img src="icon.png" style="width: 20px; height: 20px; border-radius: 5px; vertical-align: middle; margin-right: 4px;" alt="Icon">
-                <span class="widget-title" id="widgetTitle">ĐẾM NGƯỢC POPUP</span>
+            <div class="drag-handle" title="Chạm giữ để di chuyển HUD trên màn hình ô tô">
+                <span class="ai-live-badge">
+                    <span class="pulse-dot" id="camStatusDot"></span>
+                    <span class="badge-text" id="camStatusText">CAM VIETMAP AI</span>
+                </span>
             </div>
             <div class="widget-controls">
-                <button class="icon-btn-text" id="sizeToggleBtn" onclick="handleToggleSize(event)" title="Đổi cỡ nhanh (+75% / +100% / Tự kéo)">📐 CỠ TOOL</button>
-                <button class="icon-btn-text" id="autoMinBtn" onclick="handleToggleAutoMin(event)">🎈 TỰ ẨN</button>
-                <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)">🔊</button>
-                <button class="icon-btn" title="Thu nhỏ bong bóng" onclick="minimizeToBubble(event)">⚊</button>
-                <button class="icon-btn btn-close" title="Đóng ứng dụng" onclick="handleCloseApp(event)" style="color: #ff5555; font-weight: bold;">✖</button>
+                <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)" title="Bật/Tắt Âm Thanh">🔊</button>
+                <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Tool">✖</button>
             </div>
         </div>
 
-        <div class="widget-body">
-            <!-- PHÍA BÊN TRÁI: BÀN PHÍM SỐ NGANG -->
-            <div class="body-left">
-                <div class="numpad-grid">
-                    <button class="num-btn" onclick="handleNum('1', event)">1</button>
-                    <button class="num-btn" onclick="handleNum('2', event)">2</button>
-                    <button class="num-btn" onclick="handleNum('3', event)">3</button>
-                    <button class="num-btn" onclick="handleNum('4', event)">4</button>
-                    <button class="num-btn" onclick="handleNum('5', event)">5</button>
-                    <button class="num-btn" onclick="handleNum('6', event)">6</button>
-                    <button class="num-btn" onclick="handleNum('7', event)">7</button>
-                    <button class="num-btn" onclick="handleNum('8', event)">8</button>
-                    <button class="num-btn" onclick="handleNum('9', event)">9</button>
-                    <button class="num-btn btn-clear" title="Xoá hết" onclick="handleClear(event)">XOÁ</button>
-                    <button class="num-btn" onclick="handleNum('0', event)">0</button>
-                    <button class="num-btn btn-backspace" title="Xoá 1 số" onclick="handleBackspace(event)">⌫</button>
+        <!-- MAIN HUD DISPLAY BODY -->
+        <div class="hud-body">
+            <!-- CIRCULAR PROGRESS RING & COUNTDOWN DIGITS -->
+            <div class="hud-circle-container">
+                <svg class="progress-ring" width="180" height="180" viewBox="0 0 180 180">
+                    <circle class="progress-ring-track" cx="90" cy="90" r="76"></circle>
+                    <circle class="progress-ring-fill" id="progressFill" cx="90" cy="90" r="76"></circle>
+                </svg>
+                <div class="hud-center-content">
+                    <div class="hud-digits" id="digitalDisplay">
+                        <span class="digit" id="digit1">0</span>
+                        <span class="digit" id="digit2">0</span>
+                    </div>
+                    <div class="hud-unit">GIÂY DỪNG ĐÈN ĐỎ</div>
                 </div>
             </div>
 
-            <!-- PHÍA BÊN PHẢI: ĐỒNG HỒ, NÚT BẮT ĐẦU & PRESETS -->
-            <div class="body-right">
-                <div class="status-indicator" id="statusIndicator">
-                    <span id="statusIcon">⏱️</span> <span id="statusText">SẴN SÀNG</span>
-                </div>
-                
-                <div class="digital-display" id="digitalDisplay" title="Chạm để xoá thời gian" onclick="handleClear(event)">
-                    <span class="digit" id="digit1">0</span>
-                    <span class="digit" id="digit2">0</span>
-                    <span class="digit" id="digit3">0</span>
-                </div>
-                <div class="unit-label">GIÂY</div>
-
-                <!-- PHÍM ĐIỀU KHIỂN CHÍNH -->
-                <div class="quick-actions">
-                    <button id="startBtn" class="btn btn-start" onclick="handleStart(event)">▶ BẮT ĐẦU</button>
-                    <button id="pauseBtn" class="btn btn-pause" onclick="handlePause(event)">⏸ DỪNG</button>
-                    <button id="resetBtn" class="btn btn-reset" onclick="handleReset(event)">↺ ĐẶT LẠI</button>
-                </div>
-
-                <!-- PHÍM CHỌN NHANH PRESETS: 60s, 80s, 100s, 120s -->
-                <div class="preset-row">
-                    <button class="preset-chip" onclick="handlePreset(60, event)">60s</button>
-                    <button class="preset-chip" onclick="handlePreset(80, event)">80s</button>
-                    <button class="preset-chip" onclick="handlePreset(100, event)">100s</button>
-                    <button class="preset-chip" onclick="handlePreset(120, event)">120s</button>
-                </div>
+            <!-- DYNAMIC STATUS BADGE -->
+            <div class="hud-status-badge" id="statusBadge">
+                <span class="status-icon" id="statusIcon">🛑</span>
+                <span class="status-text" id="statusText">ĐÈN ĐỎ AI - ĐANG ĐẾM</span>
             </div>
         </div>
-        <!-- FLUSH CORNER RESIZE HANDLE (3 DIAGONAL SLASH GRIP LINES) -->
-        <div class="resize-handle" id="resizeHandle" style="position: absolute !important; right: 0px !important; bottom: 0px !important; left: auto !important; top: auto !important; z-index: 99999 !important;" title="Kéo góc này để chỉnh độ rộng / cao (Không vượt quá màn hình)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+
+        <!-- FLUSH CORNER RESIZE HANDLE -->
+        <div class="resize-handle" id="resizeHandle" title="Kéo góc để đổi kích thước HUD">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                 <line x1="19" y1="9" x2="9" y2="19"></line>
                 <line x1="19" y1="13" x2="13" y2="19"></line>
                 <line x1="19" y1="17" x2="17" y2="19"></line>
@@ -88,11 +63,17 @@
         </div>
     </div>
 
-    <!-- MINIMIZED BUBBLE -->
-    <div class="floating-bubble hidden" id="floatingBubble" onclick="showWidget(event)">
-        <div class="bubble-content">
-            <span class="bubble-icon" id="bubbleIcon">⏱️</span>
-            <span class="bubble-digits" id="bubbleDigits">030</span>
+    <!-- BẢNG GIẢ LẬP NÚT BẤM DÙNG THỬ DỄ DÀNG -->
+    <div class="demo-tester-bar">
+        <div class="demo-title">🎮 BẤM NÚT DÙNG THỬ (>10S BLUE | 10S-6S YELLOW | 5S-1S RED | 0S GREEN)</div>
+        <div class="demo-btn-group">
+            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(35)">🔵 Đèn đỏ 35s (>10s Số Xanh Blue)</button>
+            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(30)">🔵 30s (Tik-Tik)</button>
+            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(20)">🔵 20s (Tik-Tik)</button>
+            <button class="demo-btn btn-yellow" onclick="window.setCameraCountdown(10)">🟡 10s (Số Vàng, Tik-Tik)</button>
+            <button class="demo-btn btn-red" onclick="window.setCameraCountdown(5)">🔴 5s (Số Đỏ, Tik 1s)</button>
+            <button class="demo-btn btn-green" onclick="window.onRedLightEnded()">🟢 Đèn Xanh 0s (Số Xanh Green)</button>
+            <button class="demo-btn btn-blue" onclick="window.onVehicleMoved()">🚗 Xe Chạy (Ẩn Tool)</button>
         </div>
     </div>
 

@@ -30,6 +30,10 @@ public class FloatingService extends Service {
     private WindowManager.LayoutParams params;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    private VehicleSpeedMonitor speedMonitor;
+    private VietMapStreamReader streamReader;
+    private TrafficLightDetector detector;
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -41,8 +45,8 @@ public class FloatingService extends Service {
 
         createNotificationChannel();
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Đếm Ngược Floating")
-                .setContentText("Cửa sổ nổi đếm ngược đang chạy")
+                .setContentTitle("Đếm Ngược AI VietMap")
+                .setContentText("Tự động nhận diện đèn đỏ VietMap đang chạy ngầm")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setOngoing(true)
@@ -115,6 +119,70 @@ public class FloatingService extends Service {
             e.printStackTrace();
             stopSelf();
         }
+
+        setupAIServices();
+    }
+
+    private void setupAIServices() {
+        detector = new TrafficLightDetector(this, new TrafficLightDetector.DetectionListener() {
+            @Override
+            public void onRedLightCountdownDetected(final int seconds, float confidence) {
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript("if(window.setCameraCountdown){window.setCameraCountdown(" + seconds + ");}", null);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onRedLightEnded() {
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript("if(window.onRedLightEnded){window.onRedLightEnded();}", null);
+                        }
+                    }
+                });
+            }
+        });
+
+        streamReader = new VietMapStreamReader(null, null, detector);
+
+        speedMonitor = new VehicleSpeedMonitor(this, new VehicleSpeedMonitor.SpeedListener() {
+            @Override
+            public void onVehicleStopped() {
+                if (streamReader != null && !streamReader.isStreaming()) {
+                    streamReader.startStreaming();
+                }
+            }
+
+            @Override
+            public void onVehicleMoving(float speedKmh) {
+                if (streamReader != null && streamReader.isStreaming()) {
+                    streamReader.stopStreaming();
+                }
+                if (detector != null) {
+                    detector.reset();
+                }
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript("if(window.onVehicleMoved){window.onVehicleMoved();}", null);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onSpeedUpdated(float speedKmh) {}
+        });
+
+        speedMonitor.startMonitoring();
     }
 
     public class WebAppInterface {
@@ -176,6 +244,18 @@ public class FloatingService extends Service {
         }
 
         @JavascriptInterface
+        public void simulateVehicleStopAndRedLight(final int seconds) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (webView != null) {
+                        webView.evaluateJavascript("if(window.setCameraCountdown){window.setCameraCountdown(" + seconds + ");}", null);
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void closeApp() {
             mainHandler.post(new Runnable() {
                 @Override
@@ -208,6 +288,12 @@ public class FloatingService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (speedMonitor != null) {
+            speedMonitor.stopMonitoring();
+        }
+        if (streamReader != null) {
+            streamReader.stopStreaming();
+        }
         if (webView != null && windowManager != null) {
             try {
                 windowManager.removeView(webView);

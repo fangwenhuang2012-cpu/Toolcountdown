@@ -15,4 +15,5 @@ __pycache__/
 *.iml
 scratch/
 .antigravity/
+*.zip
 
