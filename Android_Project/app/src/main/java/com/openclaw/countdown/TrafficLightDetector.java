@@ -94,8 +94,10 @@ public class TrafficLightDetector {
     }
 
     /**
-     * Thuật toán quét Đa Cụm Đèn Đỏ Đếm Ngược (Multi-Zone Red Light Countdown OCR)
-     * "Miễn là phát hiện thấy bất kỳ đèn đỏ có đếm ngược nào nằm ở đâu (trái, giữa, phải, nhiều làn cùng lúc) là đếm ngay!"
+     * Thuật toán quét 3 Làn Đường Thực Tế (3-Lane Spatial Traffic Light Scanning):
+     * 1. Làn chính trước mặt (Center/Front Lane: 28% - 72% khung hình) -> Ưu tiên quét trước
+     * 2. Làn kế trái (Left Lane: 0% - 38%)
+     * 3. Làn kế phải (Right Lane: 62% - 100%)
      */
     private int detectCountdownSeconds(Bitmap bitmap) {
         if (bitmap == null) return -1;
@@ -103,19 +105,23 @@ public class TrafficLightDetector {
         try {
             int width = bitmap.getWidth();
             int height = bitmap.getHeight();
-            int searchHeight = (int) (height * 0.48); // Quét nửa trên khung hình (giá long môn / cột đèn vươn)
+            int searchHeight = (int) (height * 0.48); // Tầm mắt quét nửa trên khung hình (giá long môn / cột đèn vươn)
 
-            // Chia chiều ngang khung hình thành 4 vùng độc lập: Trái - Giữa Trái - Giữa Phải - Phải
-            // Đảm bảo dù có 2-3 cụm đèn đỏ nằm rải rác khắp nơi trên các làn đường khác nhau,
-            // thuật toán đều quét qua từng cụm một để tìm số đếm ngược rực đỏ!
-            int numZones = 4;
-            int zoneWidth = width / numZones;
+            // Định nghĩa 3 vùng tương ứng 3 Làn đường:
+            // Vùng 0: Làn chính trước mặt (Center/Front)
+            // Vùng 1: Làn kế trái (Left Lane)
+            // Vùng 2: Làn kế phải (Right Lane)
+            int[][] lanes = new int[][]{
+                { (int)(width * 0.28), (int)(width * 0.72) }, // Làn chính trước mặt (quét trước)
+                { 0, (int)(width * 0.38) },                   // Làn kế trái
+                { (int)(width * 0.62), width }                // Làn kế phải
+            };
 
             float[] hsv = new float[3];
 
-            for (int z = 0; z < numZones; z++) {
-                int zStartX = z * zoneWidth;
-                int zEndX = (z + 1) * zoneWidth;
+            for (int i = 0; i < lanes.length; i++) {
+                int zStartX = lanes[i][0];
+                int zEndX = lanes[i][1];
 
                 int brightPixelCount = 0;
                 int redLightClusterPixels = 0;
@@ -129,7 +135,7 @@ public class TrafficLightDetector {
                         float sat = hsv[1];
                         float val = hsv[2];
 
-                        // Điểm ảnh màu Đỏ tươi rực của đèn LED đếm ngược (Hue: 0-22° hoặc 340-360°, Saturation > 0.45, Value > 0.6)
+                        // Lọc sắc độ Đỏ/Cam rực rỡ của bóng LED 7 đoạn (Hue: 0-22° hoặc 340-360°)
                         if ((hue <= 22f || hue >= 340f) && sat >= 0.45f && val >= 0.60f) {
                             brightPixelCount++;
                             if (sat >= 0.55f && val >= 0.60f) {
@@ -139,17 +145,18 @@ public class TrafficLightDetector {
                     }
                 }
 
-                // Nếu vùng này có cụm bóng đèn đỏ rực + số đếm ngược LED 7 đoạn
+                // Nếu làn đường này phát hiện có cụm bóng đèn đỏ rực + số đếm ngược LED 7 đoạn
                 if (redLightClusterPixels >= 4 && brightPixelCount >= 6) {
                     int estimatedSeconds = Math.min(99, Math.max(1, (brightPixelCount * 3) / 8));
                     if (estimatedSeconds >= 10 && estimatedSeconds <= 99) {
-                        Log.d(TAG, "Phát hiện cụm Đèn Đỏ Đếm Ngược tại Vùng #" + (z + 1) + " -> Số giây đếm: " + estimatedSeconds + "s");
+                        String laneName = (i == 0) ? "Làn Trước Mặt" : ((i == 1) ? "Làn Kế Trái" : "Làn Kế Phải");
+                        Log.d(TAG, "Phát hiện Đèn Đỏ Đếm Ngược tại [" + laneName + "] -> " + estimatedSeconds + "s");
                         return estimatedSeconds;
                     }
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error in detectCountdownSeconds multi-zone OCR", e);
+            Log.e(TAG, "Error in 3-lane countdown OCR", e);
         }
 
         return -1;
