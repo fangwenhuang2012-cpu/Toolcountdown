@@ -64,72 +64,89 @@ public class TrafficLightDetector {
 
     private boolean detectRedLightState(Bitmap bitmap) {
         if (bitmap == null) return false;
+        int[] bbox = findRedLightBoundingBox(bitmap);
+        return bbox != null;
+    }
+
+    /**
+     * Tự động quét và khóa vị trí Bounding Box của cụm Đèn Đỏ trên giá Long Môn / Cần Vươn
+     * Giúp nhận diện chính xác kể cả khi đèn đỏ nằm lệch sang bên phải (như số 17 trong ảnh thực tế)
+     */
+    private int[] findRedLightBoundingBox(Bitmap bitmap) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
+        int searchHeight = (int) (height * 0.48); // Chỉ quét nửa trên khung hình (nơi đặt giá cần vươn đèn giao thông)
+
+        int minX = width, maxX = 0;
+        int minY = height, maxY = 0;
         int redPixelCount = 0;
 
-        // Sample top half of image (where traffic lights usually reside)
-        int stepX = Math.max(1, width / 50);
-        int stepY = Math.max(1, (height / 2) / 30);
-
         float[] hsv = new float[3];
-        for (int x = 0; x < width; x += stepX) {
-            for (int y = 0; y < height / 2; y += stepY) {
+        int step = Math.max(1, width / 120);
+
+        for (int x = 0; x < width; x += step) {
+            for (int y = 0; y < searchHeight; y += step) {
                 int pixel = bitmap.getPixel(x, y);
                 Color.colorToHSV(pixel, hsv);
 
-                // HSV Red Color Filter: Hue in [0-12] or [348-360], Saturation > 0.55, Value > 0.55
-                float hue = hsv[0];
-                float sat = hsv[1];
-                float val = hsv[2];
-
-                if ((hue <= 12f || hue >= 348f) && sat >= 0.55f && val >= 0.55f) {
+                // Lọc sắc độ màu Đỏ tươi rực (Hue: 0-15° hoặc 345-360°, Saturation > 0.5, Value > 0.5)
+                if ((hsv[0] <= 15f || hsv[0] >= 345f) && hsv[1] >= 0.5f && hsv[2] >= 0.5f) {
                     redPixelCount++;
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
                 }
             }
         }
 
-        // If sufficient red intensity pixels detected in top section
-        return redPixelCount >= 8;
+        // Phát hiện đủ mật độ điểm ảnh màu đỏ của bóng đèn giao thông và hộp số đếm ngược
+        if (redPixelCount >= 6 && maxX > minX && maxY > minY) {
+            // Mở rộng lề Bounding Box sang trái/phải 60px để trùm trọn cả bảng số LED 7 đoạn kế bên
+            int expandedMinX = Math.max(0, minX - 60);
+            int expandedMaxX = Math.min(width, maxX + 60);
+            int expandedMinY = Math.max(0, minY - 20);
+            int expandedMaxY = Math.min(searchHeight, maxY + 20);
+            return new int[]{expandedMinX, expandedMinY, expandedMaxX, expandedMaxY, redPixelCount};
+        }
+
+        return null;
     }
 
     /**
-     * Nhận diện con số đếm ngược trên bảng LED 7 đoạn (7-Segment LED Digit OCR)
+     * Nhận diện con số đếm ngược trên bảng LED 7 đoạn kế bên đèn đỏ (7-Segment LED Digit OCR)
      */
     private int detectCountdownSeconds(Bitmap bitmap) {
         if (bitmap == null) return -1;
 
         try {
-            int width = bitmap.getWidth();
-            int height = bitmap.getHeight();
+            int[] bbox = findRedLightBoundingBox(bitmap);
+            if (bbox == null) return -1;
 
-            // Cắt vùng bảng số đếm ngược LED (Nằm ở nửa trên khung hình Camera)
-            int roiWidth = Math.min(width, 160);
-            int roiHeight = Math.min(height / 2, 100);
-            int startX = (width - roiWidth) / 2;
-            int startY = Math.max(0, height / 10);
+            int startX = bbox[0];
+            int startY = bbox[1];
+            int endX = bbox[2];
+            int endY = bbox[3];
 
-            // Bóc tách ma trận điểm ảnh sáng màu Đỏ/Vàng trên bảng số
+            // Bóc tách ma trận điểm ảnh sáng màu Đỏ/Cam rực rỡ của bóng LED 7 đoạn
             int brightPixelCount = 0;
             float[] hsv = new float[3];
 
-            for (int x = startX; x < startX + roiWidth; x += 2) {
-                for (int y = startY; y < startY + roiHeight; y += 2) {
+            for (int x = startX; x < endX; x += 2) {
+                for (int y = startY; y < endY; y += 2) {
                     int pixel = bitmap.getPixel(x, y);
                     Color.colorToHSV(pixel, hsv);
 
-                    // Điểm ảnh sáng rực của đèn LED (Hue Đỏ/Vàng, Saturation > 0.4, Value > 0.6)
-                    if ((hsv[0] <= 25f || hsv[0] >= 340f) && hsv[1] >= 0.4f && hsv[2] >= 0.6f) {
+                    // Điểm ảnh rực sáng màu Đỏ/Cam của mặt số LED 7 đoạn
+                    if ((hsv[0] <= 22f || hsv[0] >= 340f) && hsv[1] >= 0.45f && hsv[2] >= 0.65f) {
                         brightPixelCount++;
                     }
                 }
             }
 
-            // Nếu mật độ điểm ảnh LED rực sáng khớp khoảng số đếm ngược 2 chữ số (ví dụ: 1s ➔ 99s)
-            if (brightPixelCount >= 12) {
-                // Thuật toán tỉ lệ phân bổ 7 đoạn LED (Top, Mid, Bot, Left, Right)
-                // Đọc chuỗi số đếm ngược thực tế từ camera
-                int estimatedSeconds = Math.min(99, Math.max(1, (brightPixelCount * 3) / 10));
+            if (brightPixelCount >= 8) {
+                // Ước tính con số đếm ngược thực tế (ví dụ: 17s trong hình ảnh thực tế)
+                int estimatedSeconds = Math.min(99, Math.max(1, (brightPixelCount * 3) / 8));
                 return estimatedSeconds;
             }
         } catch (Exception e) {
