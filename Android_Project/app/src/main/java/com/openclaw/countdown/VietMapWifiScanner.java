@@ -73,10 +73,8 @@ public class VietMapWifiScanner {
         return false;
     }
 
-    public void connectToVietMapCam(String ssid, String password) {
-        if (password == null || password.isEmpty()) {
-            password = "12345678"; // Mật khẩu mặc định phổ biến của camera VietMap
-        }
+    public void connectToVietMapCam(final String ssid, final String passwordParam) {
+        final String password = (passwordParam == null || passwordParam.isEmpty()) ? "12345678" : passwordParam; // Mật khẩu mặc định phổ biến của camera VietMap
 
         Log.d(TAG, "Đang tự động kết nối tới Wi-Fi Camera VietMap: " + ssid);
 

@@ -138,7 +138,9 @@ public class VietMapStreamReader {
             MediaMetadataRetriever mmr = new MediaMetadataRetriever();
             mmr.setDataSource(url, new HashMap<String, String>());
             Bitmap rtspBitmap = mmr.getFrameAtTime(-1);
-            mmr.release();
+            try {
+                mmr.release();
+            } catch (Throwable ignored) {}
             if (rtspBitmap != null) {
                 if (statusListener != null) {
                     statusListener.onStatusUpdated("Đã kết nối Camera (RTSP Stream)", true);
