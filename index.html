@@ -18,14 +18,45 @@
         <!-- TOP HEADER HUD BAR -->
         <div class="widget-header" id="widgetHeader">
             <div class="drag-handle" title="Chạm giữ để di chuyển HUD trên màn hình ô tô">
-                <span class="ai-live-badge">
+                <button class="ai-live-badge-btn" onclick="toggleStatusPanel(event)" title="Bấm để mở Báo cáo Realtime">
                     <span class="pulse-dot" id="camStatusDot"></span>
                     <span class="badge-text" id="camStatusText">CAM VIETMAP AI</span>
-                </span>
+                    <span class="badge-arrow">▶</span>
+                </button>
             </div>
             <div class="widget-controls">
+                <button class="icon-btn" id="infoBtn" onclick="toggleStatusPanel(event)" title="Xem Báo cáo Trạng thái">📊</button>
                 <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)" title="Bật/Tắt Âm Thanh">🔊</button>
                 <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Tool">✖</button>
+            </div>
+        </div>
+
+        <!-- BÁO CÁO TRẠNG THÁI REALTIME (SIDE-BY-SIDE SIDEBAR) -->
+        <div class="status-expanded-card hidden" id="statusExpandedCard">
+            <div class="card-header">
+                <span class="card-title">📊 BÁO CÁO KẾT NỐI REALTIME</span>
+                <button class="card-close-btn" onclick="toggleStatusPanel(event)">✖</button>
+            </div>
+            <div class="card-body">
+                <div class="status-item">
+                    <span class="item-label">📶 Wi-Fi Kết Nối:</span>
+                    <span class="item-val val-wifi" id="valWifi">Đang dò Wi-Fi...</span>
+                </div>
+                <div class="status-item">
+                    <span class="item-label">📹 Tình Hình Video:</span>
+                    <span class="item-val val-stream" id="valStream">Chưa kết nối Camera</span>
+                </div>
+                <div class="status-item">
+                    <span class="item-label">🚗 Tốc Độ GPS Xe:</span>
+                    <span class="item-val val-gps" id="valGps">0 km/h (Sẵn sàng)</span>
+                </div>
+                <div class="status-item">
+                    <span class="item-label">🤖 Trạng Thái AI:</span>
+                    <span class="item-val val-ai" id="valAi">Đang chờ xe dừng đèn đỏ</span>
+                </div>
+            </div>
+            <div class="card-footer-tip">
+                💡 Tự động ẩn khi xe di chuyển hoặc hết đèn đỏ
             </div>
         </div>
 
@@ -60,19 +91,6 @@
                 <line x1="19" y1="13" x2="13" y2="19"></line>
                 <line x1="19" y1="17" x2="17" y2="19"></line>
             </svg>
-        </div>
-    </div>
-
-    <!-- BẢNG GIẢ LẬP NÚT BẤM DÙNG THỬ DỄ DÀNG -->
-    <div class="demo-tester-bar">
-        <div class="demo-title">🎮 BẤM NÚT DÙNG THỬ (CHỈ BẬT TOOL KHI ĐẾM BAN ĐẦU ≥ 10S | TỐC ĐỘ DỪNG ≤ 5KM/H, ẨN > 8KM/H)</div>
-        <div class="demo-btn-group">
-            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(35)">🔵 35s (Bắt đầu ≥10s - Số Xanh Blue)</button>
-            <button class="demo-btn btn-blue" onclick="window.setCameraCountdown(20)">🔵 20s (Bắt đầu ≥10s - Tik-Tik)</button>
-            <button class="demo-btn btn-yellow" onclick="window.setCameraCountdown(10)">🟡 10s (Bắt đầu = 10s - Số Vàng)</button>
-            <button class="demo-btn btn-red" onclick="window.setCameraCountdown(5)">🔴 5s (Bỏ qua vì < 10s ban đầu)</button>
-            <button class="demo-btn btn-green" onclick="window.onRedLightEnded()">🟢 Đèn Xanh 0s (Nhạc hiệu)</button>
-            <button class="demo-btn btn-blue" onclick="window.onVehicleMoved()">🚗 Xe Chạy >8km/h (Ẩn Tool)</button>
         </div>
     </div>
 

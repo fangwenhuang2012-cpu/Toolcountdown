@@ -333,9 +333,7 @@ html, body {
 
 .resize-handle:hover {
     color: var(--blue-accent);
-}
-
-/* BẢN THU GỌN BÁO CÁO TRẠNG THÁI (GẮN LIỀN GIAO DIỆN CHÍNH HUD) */
+}/* BẢN THU GỌN BÁO CÁO TRẠNG THÁI (GẮN LIỀN GIAO DIỆN CHÍNH HUD) */
 .ai-live-badge-btn {
     display: inline-flex;
     align-items: center;
@@ -449,6 +447,15 @@ html, body {
     font-weight: 600;
 }
 
+@media (max-width: 650px) {
+    .status-expanded-card {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        width: 100%;
+        height: auto;
+    }
+}
     </style>
 </head>
 <body>
@@ -827,24 +834,24 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
     const valStream = document.getElementById('valStream');
     const valGps = document.getElementById('valGps');
     const valAi = document.getElementById('valAi');
-    const camStatusText = document.getElementById('camStatusText');
-    const camStatusDot = document.getElementById('camStatusDot');
+    const chipText = document.getElementById('chipText');
+    const chipDot = document.getElementById('chipDot');
 
     if (valWifi && wifiSsid) valWifi.textContent = wifiSsid;
     if (valStream && streamStatus) valStream.textContent = streamStatus;
     if (valGps && gpsSpeed !== undefined) valGps.textContent = gpsSpeed;
     if (valAi && aiStatus) valAi.textContent = aiStatus;
 
-    if (camStatusText) {
+    if (chipText) {
         if (wifiSsid && (wifiSsid.toLowerCase().includes('vietmap') || wifiSsid.toLowerCase().includes('kc01') || wifiSsid.toLowerCase().includes('papago'))) {
-            camStatusText.textContent = wifiSsid;
-            if (camStatusDot) camStatusDot.className = "pulse-dot green";
+            chipText.textContent = "📡 VietMap AI: " + wifiSsid;
+            if (chipDot) chipDot.className = "status-chip-dot green";
         } else if (streamStatus && streamStatus.includes("Đã kết nối")) {
-            camStatusText.textContent = "CAM VIETMAP LIVE";
-            if (camStatusDot) camStatusDot.className = "pulse-dot green";
+            chipText.textContent = "📡 VietMap AI: Live Stream";
+            if (chipDot) chipDot.className = "status-chip-dot green";
         } else {
-            camStatusText.textContent = wifiSsid || "CAM VIETMAP AI";
-            if (camStatusDot) camStatusDot.className = "pulse-dot";
+            chipText.textContent = "📡 VietMap AI: " + (wifiSsid || "Đang dò Wi-Fi");
+            if (chipDot) chipDot.className = "status-chip-dot yellow";
         }
     }
 };

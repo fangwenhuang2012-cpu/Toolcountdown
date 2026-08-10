@@ -291,8 +291,35 @@ function handleCloseApp(e) {
     }
 }
 
+function toggleStatusPanel(e) {
+    if (e) e.stopPropagation();
+    const card = document.getElementById('statusExpandedCard');
+    if (card) {
+        card.classList.toggle('hidden');
+    }
+}
+
+function checkEnvironment() {
+    if (window.AndroidBridge || location.protocol === 'file:') {
+        document.body.classList.add('is-android-app');
+    }
+}
+
+window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus) {
+    const valWifi = document.getElementById('valWifi');
+    const valStream = document.getElementById('valStream');
+    const valGps = document.getElementById('valGps');
+    const valAi = document.getElementById('valAi');
+
+    if (valWifi && wifiSsid) valWifi.textContent = wifiSsid;
+    if (valStream && streamStatus) valStream.textContent = streamStatus;
+    if (valGps && gpsSpeed !== undefined) valGps.textContent = gpsSpeed;
+    if (valAi && aiStatus) valAi.textContent = aiStatus;
+};
+
 function init() {
     getElements();
+    checkEnvironment();
     if (widgetHeader && floatingWidget) {
         makeDraggable(floatingWidget, widgetHeader);
     }

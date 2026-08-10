@@ -57,7 +57,7 @@ html, body {
     z-index: 9999;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible !important;
     pointer-events: auto !important;
     transition: transform 0.2s ease, opacity 0.25s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
@@ -335,78 +335,126 @@ html, body {
     color: var(--blue-accent);
 }
 
-/* DEMO INTERACTIVE TESTER BAR */
-.demo-tester-bar {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(16px);
+/* BẢN THU GỌN BÁO CÁO TRẠNG THÁI (GẮN LIỀN GIAO DIỆN CHÍNH HUD) */
+.ai-live-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 20px;
-    padding: 14px 22px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.ai-live-badge-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: var(--blue-accent);
+}
+
+.badge-arrow {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    margin-left: 2px;
+}
+
+.status-expanded-card {
+    position: absolute;
+    top: 0;
+    left: calc(100% + 12px);
+    width: 280px;
+    height: 100%;
+    background: var(--hud-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
     display: flex;
     flex-direction: column;
-    align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 243, 255, 0.15);
     z-index: 10000;
-    pointer-events: auto !important;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.demo-title {
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.8px;
-    color: #94a3b8;
-    text-transform: uppercase;
+.status-expanded-card.hidden {
+    display: none !important;
 }
 
-.demo-btn-group {
+.card-header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
 }
 
-.demo-btn {
-    border: none;
-    padding: 10px 18px;
-    border-radius: 12px;
-    font-size: 0.85rem;
+.card-title {
+    font-size: 0.72rem;
     font-weight: 800;
-    color: #ffffff;
+    color: var(--blue-accent);
+    letter-spacing: 0.5px;
+}
+
+.card-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.85rem;
     cursor: pointer;
-    transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
 }
 
-.demo-btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-2px);
+.card-close-btn:hover {
+    color: var(--red-accent);
 }
 
-.demo-btn:active {
-    transform: scale(0.95);
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.demo-btn.btn-blue {
-    background: linear-gradient(135deg, #0a84ff, #0056b3);
-    box-shadow: 0 4px 14px rgba(10, 132, 255, 0.4);
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
 }
 
-.demo-btn.btn-yellow {
-    background: linear-gradient(135deg, #ffcc00, #d4a000);
-    color: #000000;
-    box-shadow: 0 4px 14px rgba(255, 204, 0, 0.4);
+.item-label {
+    color: var(--text-muted);
+    font-weight: 600;
 }
 
-.demo-btn.btn-red {
-    background: linear-gradient(135deg, #ff2d55, #e00034);
-    box-shadow: 0 4px 14px rgba(255, 45, 85, 0.4);
+.item-val {
+    font-weight: 700;
+    color: #ffffff;
 }
 
-.demo-btn.btn-green {
-    background: linear-gradient(135deg, #30d158, #1ca03e);
-    box-shadow: 0 4px 14px rgba(48, 209, 88, 0.4);
+.val-wifi { color: #0a84ff; }
+.val-stream { color: #ffcc00; }
+.val-gps { color: #30d158; }
+.val-ai { color: #ffffff; }
+
+.card-footer-tip {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 8px;
+    font-weight: 600;
+}
+
+@media (max-width: 650px) {
+    .status-expanded-card {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        width: 100%;
+        height: auto;
+    }
 }
