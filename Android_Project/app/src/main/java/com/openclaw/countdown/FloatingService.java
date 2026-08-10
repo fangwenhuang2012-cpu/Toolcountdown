@@ -33,100 +33,54 @@ public class FloatingService extends Service {
     private VehicleSpeedMonitor speedMonitor;
     private VietMapStreamReader streamReader;
     private TrafficLightDetector detector;
+    private VietMapWifiScanner wifiScanner;
 
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    private String currentWifiSsid = "Đang dò Wi-Fi VietMap...";
+    private String currentStreamStatus = "Chưa kết nối luồng Camera";
+    private String currentGpsSpeed = "0 km/h (Sẵn sàng)";
+    private String currentAiStatus = "Đang chờ xe dừng hẳn";
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        createNotificationChannel();
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Đếm Ngược AI VietMap")
-                .setContentText("Tự động nhận diện đèn đỏ VietMap đang chạy ngầm")
-                .setSmallIcon(R.drawable.ic_notification)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
-                .setOngoing(true)
-                .build();
-
-        startForeground(NOTIFICATION_ID, notification);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            stopSelf();
-            return;
-        }
-
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-
-        // Fix WebView Service Context Crash: Use ContextThemeWrapper
-        ContextThemeWrapper contextThemeWrapper = new ContextThemeWrapper(this, R.style.Theme_FloatingCountdown);
-        webView = new WebView(contextThemeWrapper);
-
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
-        webSettings.setAllowFileAccess(true);
-        webSettings.setTextZoom(100); // Lock text zoom to 100% to prevent Android system font zoom distortion
-        webSettings.setUseWideViewPort(true);
-        webSettings.setLoadWithOverviewMode(true);
-        webSettings.setSupportZoom(false);
-        webSettings.setBuiltInZoomControls(false);
-        webSettings.setDisplayZoomControls(false);
-
-        webView.setBackgroundColor(Color.TRANSPARENT);
-        webView.setWebViewClient(new WebViewClient());
-        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
-
-        int layoutType;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        } else {
-            layoutType = WindowManager.LayoutParams.TYPE_PHONE;
-        }
-
-        float density = getResources().getDisplayMetrics().density;
-        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            windowManager.getDefaultDisplay().getRealMetrics(metrics);
-        }
-        int screenW = metrics.widthPixels;
-        int screenH = metrics.heightPixels;
-
-        int defaultWidth = Math.min(Math.round(735 * density), screenW);
-        int defaultHeight = Math.min(Math.round(510 * density), screenH);
-        int defaultX = Math.round(15 * density);
-        int defaultY = Math.round(15 * density);
-
-        params = new WindowManager.LayoutParams(
-                defaultWidth,
-                defaultHeight,
-                layoutType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-        );
-
-        params.gravity = Gravity.TOP | Gravity.LEFT;
-        params.x = defaultX;
-        params.y = defaultY;
-
-        try {
-            windowManager.addView(webView, params);
-            webView.loadUrl("file:///android_asset/countdown_standalone.html");
-        } catch (Exception e) {
-            e.printStackTrace();
-            stopSelf();
-        }
-
-        setupAIServices();
+    private void pushStatusToUi() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (webView != null) {
+                    String js = "if(window.updateSystemStatus){window.updateSystemStatus('" +
+                            currentWifiSsid.replace("'", "\\'") + "', '" +
+                            currentStreamStatus.replace("'", "\\'") + "', '" +
+                            currentGpsSpeed.replace("'", "\\'") + "', '" +
+                            currentAiStatus.replace("'", "\\'") + "');}";
+                    webView.evaluateJavascript(js, null);
+                }
+            }
+        });
     }
 
     private void setupAIServices() {
+        wifiScanner = new VietMapWifiScanner(this, new VietMapWifiScanner.WifiScanListener() {
+            @Override
+            public void onVietMapCamFound(String ssid, int signalLevel) {
+                currentWifiSsid = "Phát hiện: " + ssid;
+                pushStatusToUi();
+            }
+
+            @Override
+            public void onConnectedToVietMapCam(String ssid) {
+                currentWifiSsid = ssid;
+                pushStatusToUi();
+            }
+
+            @Override
+            public void onError(String errorMsg) {}
+        });
+        currentWifiSsid = wifiScanner.getCurrentWifiSSID();
+        wifiScanner.scanForVietMapCam();
+
         detector = new TrafficLightDetector(this, new TrafficLightDetector.DetectionListener() {
             @Override
             public void onRedLightCountdownDetected(final int seconds, float confidence) {
+                currentAiStatus = "Đang soi đếm ngược: " + seconds + "s";
+                pushStatusToUi();
                 mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -139,6 +93,8 @@ public class FloatingService extends Service {
 
             @Override
             public void onRedLightEnded() {
+                currentAiStatus = "Đèn xanh - Cho phép đi";
+                pushStatusToUi();
                 mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -151,10 +107,20 @@ public class FloatingService extends Service {
         });
 
         streamReader = new VietMapStreamReader(null, null, detector);
+        streamReader.setStatusListener(new VietMapStreamReader.StreamStatusListener() {
+            @Override
+            public void onStatusUpdated(String streamStatus, boolean isConnected) {
+                currentStreamStatus = streamStatus;
+                pushStatusToUi();
+            }
+        });
 
         speedMonitor = new VehicleSpeedMonitor(this, new VehicleSpeedMonitor.SpeedListener() {
             @Override
             public void onVehicleStopped() {
+                currentGpsSpeed = "0 km/h (Đã dừng)";
+                currentAiStatus = "Xe dừng - Bật luồng AI soi camera";
+                pushStatusToUi();
                 if (streamReader != null && !streamReader.isStreaming()) {
                     streamReader.startStreaming();
                 }
@@ -162,6 +128,9 @@ public class FloatingService extends Service {
 
             @Override
             public void onVehicleMoving(float speedKmh) {
+                currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
+                currentAiStatus = "Xe di chuyển - Ẩn Tool AI";
+                pushStatusToUi();
                 if (streamReader != null && streamReader.isStreaming()) {
                     streamReader.stopStreaming();
                 }
@@ -179,10 +148,14 @@ public class FloatingService extends Service {
             }
 
             @Override
-            public void onSpeedUpdated(float speedKmh) {}
+            public void onSpeedUpdated(float speedKmh) {
+                currentGpsSpeed = String.format("%.0f km/h (%s)", speedKmh, speedKmh <= 5.0f ? "Đã dừng" : "Đang di chuyển");
+                pushStatusToUi();
+            }
         });
 
         speedMonitor.startMonitoring();
+        pushStatusToUi();
     }
 
     public class WebAppInterface {

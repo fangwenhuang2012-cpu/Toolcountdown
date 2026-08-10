@@ -127,4 +127,21 @@ public class VietMapWifiScanner {
             }
         }
     }
+
+    public String getCurrentWifiSSID() {
+        if (wifiManager != null) {
+            try {
+                android.net.wifi.WifiInfo info = wifiManager.getConnectionInfo();
+                if (info != null && info.getSSID() != null) {
+                    String ssid = info.getSSID().replace("\"", "");
+                    if (!ssid.equals("<unknown ssid>") && !ssid.isEmpty()) {
+                        return ssid;
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi lấy Wi-Fi SSID hiện tại", e);
+            }
+        }
+        return "Chưa kết nối Wi-Fi Camera VietMap";
+    }
 }

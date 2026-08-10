@@ -69,7 +69,8 @@ public class VehicleSpeedMonitor {
                     locationManager.requestLocationUpdates(
                             LocationManager.GPS_PROVIDER, 500, 0, locationListener, Looper.getMainLooper()
                     );
-                } else if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                }
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                             LocationManager.NETWORK_PROVIDER, 500, 0, locationListener, Looper.getMainLooper()
                     );
@@ -82,6 +83,22 @@ public class VehicleSpeedMonitor {
         } catch (Exception e) {
             Log.e(TAG, "Error starting location updates", e);
         }
+
+        // Fallback: Mặc định sút tín hiệu Xe Đã Dừng (0 km/h) sau 1.5s nếu chưa nhận vị trí GPS
+        // giúp Tool tự động khởi chạy luồng soi Camera VietMap thực tế ngay lập tức
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isStopped) {
+                    isStopped = true;
+                    Log.d(TAG, "Default zero-speed initial fallback triggered.");
+                    if (listener != null) {
+                        listener.onSpeedUpdated(0f);
+                        listener.onVehicleStopped();
+                    }
+                }
+            }
+        }, 1500);
     }
 
     private void processSpeedChange(final float speedKmh) {
