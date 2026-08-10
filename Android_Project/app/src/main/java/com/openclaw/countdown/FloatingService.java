@@ -40,6 +40,95 @@ public class FloatingService extends Service {
     private String currentGpsSpeed = "0 km/h (Sẵn sàng)";
     private String currentAiStatus = "Đang chờ xe dừng hẳn";
 
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        createNotificationChannel();
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Đếm Ngược AI VietMap")
+                .setContentText("Tự động nhận diện đèn đỏ VietMap đang chạy ngầm")
+                .setSmallIcon(R.drawable.ic_notification)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setOngoing(true)
+                .build();
+
+        startForeground(NOTIFICATION_ID, notification);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopSelf();
+            return;
+        }
+
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        // Fix WebView Service Context Crash: Use ContextThemeWrapper
+        ContextThemeWrapper contextThemeWrapper = new ContextThemeWrapper(this, R.style.Theme_FloatingCountdown);
+        webView = new WebView(contextThemeWrapper);
+
+        WebSettings webSettings = webView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setAllowFileAccess(true);
+        webSettings.setTextZoom(100); // Lock text zoom to 100% to prevent Android system font zoom distortion
+        webSettings.setUseWideViewPort(true);
+        webSettings.setLoadWithOverviewMode(true);
+        webSettings.setSupportZoom(false);
+        webSettings.setBuiltInZoomControls(false);
+        webSettings.setDisplayZoomControls(false);
+
+        webView.setBackgroundColor(Color.TRANSPARENT);
+        webView.setWebViewClient(new WebViewClient());
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
+
+        int layoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            layoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            windowManager.getDefaultDisplay().getRealMetrics(metrics);
+        }
+        int screenW = metrics.widthPixels;
+        int screenH = metrics.heightPixels;
+
+        int defaultWidth = Math.min(Math.round(735 * density), screenW);
+        int defaultHeight = Math.min(Math.round(510 * density), screenH);
+        int defaultX = Math.round(15 * density);
+        int defaultY = Math.round(15 * density);
+
+        params = new WindowManager.LayoutParams(
+                defaultWidth,
+                defaultHeight,
+                layoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
+
+        params.gravity = Gravity.TOP | Gravity.LEFT;
+        params.x = defaultX;
+        params.y = defaultY;
+
+        try {
+            windowManager.addView(webView, params);
+            webView.loadUrl("file:///android_asset/countdown_standalone.html");
+        } catch (Exception e) {
+            e.printStackTrace();
+            stopSelf();
+        }
+
+        setupAIServices();
+    }
+
     private void pushStatusToUi() {
         mainHandler.post(new Runnable() {
             @Override
