@@ -136,7 +136,7 @@ public class VietMapStreamReader {
         // 2. Fallback sang RTSP via MediaMetadataRetriever
         try {
             MediaMetadataRetriever mmr = new MediaMetadataRetriever();
-            mmr.setDataSource(url, new HashMap<String, String>());
+            mmr.setDataSource(url);
             Bitmap rtspBitmap = mmr.getFrameAtTime(-1);
             try {
                 mmr.release();
