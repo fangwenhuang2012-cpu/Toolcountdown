@@ -195,7 +195,7 @@ public class FloatingService extends Service {
             }
         });
 
-        streamReader = new VietMapStreamReader(null, null, detector);
+        streamReader = new VietMapStreamReader(this, null, null, detector);
         streamReader.setStatusListener(new VietMapStreamReader.StreamStatusListener() {
             @Override
             public void onStatusUpdated(String streamStatus, boolean isConnected) {
@@ -203,12 +203,13 @@ public class FloatingService extends Service {
                 pushStatusToUi();
             }
         });
+        streamReader.startStreaming();
 
         speedMonitor = new VehicleSpeedMonitor(this, new VehicleSpeedMonitor.SpeedListener() {
             @Override
             public void onVehicleStopped() {
                 currentGpsSpeed = "0 km/h (Đã dừng)";
-                currentAiStatus = "Xe dừng - Bật luồng AI soi camera";
+                currentAiStatus = "Xe dừng - AI đang soi camera";
                 pushStatusToUi();
                 if (streamReader != null && !streamReader.isStreaming()) {
                     streamReader.startStreaming();
@@ -218,11 +219,8 @@ public class FloatingService extends Service {
             @Override
             public void onVehicleMoving(float speedKmh) {
                 currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
-                currentAiStatus = "Xe di chuyển - Ẩn Tool AI";
+                currentAiStatus = "Xe di chuyển - Ẩn đếm ngược";
                 pushStatusToUi();
-                if (streamReader != null && streamReader.isStreaming()) {
-                    streamReader.stopStreaming();
-                }
                 if (detector != null) {
                     detector.reset();
                 }

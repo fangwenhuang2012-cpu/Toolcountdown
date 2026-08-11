@@ -1,8 +1,14 @@
 package com.openclaw.countdown;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -15,12 +21,16 @@ public class VietMapStreamReader {
     private static final String TAG = "VietMapStreamReader";
     public static final String DEFAULT_VIETMAP_RTSP_URL = "rtsp://192.168.1.254/pjfirst";
     
-    // Danh sách các điểm Snapshot HTTP phổ biến của các dòng Camera Hành Trình VietMap / Papago
+    // Danh sách các điểm Snapshot HTTP phổ biến của các dòng Camera Hành Trình VietMap / Papago / 70mai / Dashcam
     public static final String[] SNAPSHOT_ENDPOINTS = new String[]{
         "http://192.168.1.254/cgi-bin/snapshot.cgi",
         "http://192.168.42.1/cgi-bin/snapshot.cgi",
         "http://192.168.0.1/snapshot.jpg",
-        "http://192.168.1.254/snapshot.jpg"
+        "http://192.168.1.254/snapshot.jpg",
+        "http://192.168.1.254:8080/videofeed",
+        "http://192.168.1.254/live.jpg",
+        "http://192.168.1.254/jpg/image.jpg",
+        "http://192.168.42.1/jpg/image.jpg"
     };
 
     public interface FrameCallback {
@@ -39,14 +49,21 @@ public class VietMapStreamReader {
     private HandlerThread streamThread;
     private Handler streamHandler;
     private final TrafficLightDetector detector;
+    private Network cameraWifiNetwork = null;
+    private Context context = null;
 
     private int activeSnapshotEndpointIndex = 0;
     private int consecutiveFailures = 0;
 
-    public VietMapStreamReader(String streamUrl, FrameCallback callback, TrafficLightDetector detector) {
+    public VietMapStreamReader(Context context, String streamUrl, FrameCallback callback, TrafficLightDetector detector) {
+        this.context = context;
         this.streamUrl = (streamUrl != null && !streamUrl.isEmpty()) ? streamUrl : DEFAULT_VIETMAP_RTSP_URL;
         this.callback = callback;
         this.detector = detector;
+
+        if (context != null) {
+            bindCameraNetworkWithoutDisablingMobileData(context);
+        }
     }
 
     public void setStatusListener(StreamStatusListener listener) {
@@ -55,25 +72,28 @@ public class VietMapStreamReader {
 
     /**
      * Dual Network Routing:
-     * Chỉ định rõ Wi-Fi kết nối tới IP Cam VietMap (192.168.1.254),
+     * Chỉ định rõ Wi-Fi kết nối tới IP Cam VietMap (192.168.1.254 / 192.168.42.1),
      * đồng thời giữ nguyên kết nối 4G LTE/SIM cho hệ thống Android Box
      * để YouTube, Google Maps, VietMap Live,... vẫn dùng mạng 4G 100% bình thường.
      */
-    public void bindCameraNetworkWithoutDisablingMobileData(android.content.Context context) {
+    public void bindCameraNetworkWithoutDisablingMobileData(Context context) {
+        if (context == null) return;
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
-                android.net.NetworkRequest request = new android.net.NetworkRequest.Builder()
-                        .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
-                        .removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                        .build();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cm != null) {
+                    NetworkRequest request = new NetworkRequest.Builder()
+                            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                            .build();
 
-                cm.requestNetwork(request, new android.net.ConnectivityManager.NetworkCallback() {
-                    @Override
-                    public void onAvailable(android.net.Network network) {
-                        Log.d(TAG, "Wi-Fi VietMap Local Network bound specifically for Camera RTSP stream. 4G LTE active!");
-                    }
-                });
+                    cm.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
+                        @Override
+                        public void onAvailable(Network network) {
+                            cameraWifiNetwork = network;
+                            Log.d(TAG, "Wi-Fi VietMap Local Network bound specifically for Camera RTSP/HTTP stream.");
+                        }
+                    });
+                }
             }
         } catch (Exception e) {
             Log.e(TAG, "Lỗi bind mạng cục bộ camera", e);
@@ -84,6 +104,10 @@ public class VietMapStreamReader {
         if (isStreaming) return;
         isStreaming = true;
         consecutiveFailures = 0;
+
+        if (context != null && cameraWifiNetwork == null) {
+            bindCameraNetworkWithoutDisablingMobileData(context);
+        }
 
         streamThread = new HandlerThread("VietMapStreamThread");
         streamThread.start();
@@ -112,12 +136,11 @@ public class VietMapStreamReader {
                         if (detector != null) {
                             detector.processFrame(sampleFrame);
                         }
-                        // Khi đã bắt được luồng, tăng tần số lấy mẫu lên 250ms (~4 FPS) để bắt nhanh mốc giây đếm
-                        nextDelay = 250;
+                        nextDelay = 250; // Khi đã có hình, giữ ~4 FPS
                     } else {
                         consecutiveFailures++;
                         if (consecutiveFailures > 5) {
-                            nextDelay = 800; // Giảm tần số khi chưa thấy camera để tiết kiệm tài nguyên
+                            nextDelay = 800; // Giảm tần số khi chưa thấy camera để tiết kiệm CPU
                         }
                     }
                 } catch (Exception e) {
@@ -180,7 +203,7 @@ public class VietMapStreamReader {
         }
 
         if (statusListener != null) {
-            statusListener.onStatusUpdated("Mất kết nối Camera (Chưa thấy 192.168.1.254)", false);
+            statusListener.onStatusUpdated("Mất kết nối Camera (Chưa thấy IP Camera 192.168.x.x)", false);
         }
         return null;
     }
@@ -189,9 +212,13 @@ public class VietMapStreamReader {
         HttpURLConnection connection = null;
         try {
             URL url = new URL(snapshotUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setConnectTimeout(900);
-            connection.setReadTimeout(900);
+            if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                connection = (HttpURLConnection) cameraWifiNetwork.openConnection(url);
+            } else {
+                connection = (HttpURLConnection) url.openConnection();
+            }
+            connection.setConnectTimeout(800);
+            connection.setReadTimeout(800);
             connection.setUseCaches(false);
             connection.setDoInput(true);
             connection.connect();

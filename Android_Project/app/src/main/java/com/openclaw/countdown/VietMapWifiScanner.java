@@ -1,7 +1,6 @@
 package com.openclaw.countdown;
 
 import android.content.Context;
-import android.content.IntentFilter;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
@@ -9,16 +8,19 @@ import android.net.wifi.WifiNetworkSpecifier;
 import android.net.NetworkRequest;
 import android.net.NetworkCapabilities;
 import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.PatternMatcher;
 import android.util.Log;
 
-import java.util.ArrayList;
+import java.net.InetAddress;
 import java.util.List;
 
 public class VietMapWifiScanner {
     private static final String TAG = "VietMapWifiScanner";
-    private static final String[] VIETMAP_KEYWORDS = {"VIETMAP", "VietMap", "vietmap", "KC01", "SPEEDMAP", "TS-2K", "C65", "PAPAGO"};
+    private static final String[] VIETMAP_KEYWORDS = {
+        "VIETMAP", "VietMap", "vietmap", "KC01", "SPEEDMAP", "TS-2K", "C65", "PAPAGO", 
+        "DVR", "70mai", "NAVIFLEX", "DASHCAM", "CAR", "VNAV", "WiFi"
+    };
 
     public interface WifiScanListener {
         void onVietMapCamFound(String ssid, int signalLevel);
@@ -42,8 +44,12 @@ public class VietMapWifiScanner {
             return;
         }
 
-        if (!wifiManager.isWifiEnabled()) {
-            wifiManager.setWifiEnabled(true);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            try {
+                if (!wifiManager.isWifiEnabled()) {
+                    wifiManager.setWifiEnabled(true);
+                }
+            } catch (Exception ignored) {}
         }
 
         try {
@@ -65,6 +71,7 @@ public class VietMapWifiScanner {
     }
 
     private boolean isVietMapSSID(String ssid) {
+        if (ssid == null) return false;
         for (String keyword : VIETMAP_KEYWORDS) {
             if (ssid.contains(keyword)) {
                 return true;
@@ -74,9 +81,9 @@ public class VietMapWifiScanner {
     }
 
     public void connectToVietMapCam(final String ssid, final String passwordParam) {
-        final String password = (passwordParam == null || passwordParam.isEmpty()) ? "12345678" : passwordParam; // Mật khẩu mặc định phổ biến của camera VietMap
+        final String password = (passwordParam == null || passwordParam.isEmpty()) ? "12345678" : passwordParam;
 
-        Log.d(TAG, "Đang tự động kết nối tới Wi-Fi Camera VietMap: " + ssid);
+        Log.d(TAG, "Đang kết nối tới Wi-Fi Camera VietMap: " + ssid);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
@@ -104,7 +111,7 @@ public class VietMapWifiScanner {
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Lỗi khi tự động kết nối Wi-Fi (Android 10+)", e);
+                Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 10+)", e);
             }
         } else {
             try {
@@ -121,7 +128,7 @@ public class VietMapWifiScanner {
                     listener.onConnectedToVietMapCam(ssid);
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Lỗi khi tự động kết nối Wi-Fi (Android 9 trở xuống)", e);
+                Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 9 trở xuống)", e);
             }
         }
     }
@@ -140,6 +147,18 @@ public class VietMapWifiScanner {
                 Log.e(TAG, "Lỗi lấy Wi-Fi SSID hiện tại", e);
             }
         }
+
+        // Check if Wi-Fi interface is connected
+        try {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+                if (activeNetwork != null && activeNetwork.getType() == ConnectivityManager.TYPE_WIFI && activeNetwork.isConnected()) {
+                    return "Wi-Fi Camera VietMap (Đã nối local)";
+                }
+            }
+        } catch (Exception ignored) {}
+
         return "Chưa kết nối Wi-Fi Camera VietMap";
     }
 }

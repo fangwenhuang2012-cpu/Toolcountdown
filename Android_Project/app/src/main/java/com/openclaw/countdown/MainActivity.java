@@ -34,10 +34,18 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "Vui lòng cấp quyền Vị trí (GPS) để AI tự động đo tốc độ xe dừng hẳn", Toast.LENGTH_LONG).show();
-                requestPermissions(new String[]{
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                }, CODE_LOCATION_PERMISSION);
+                if (Build.VERSION.SDK_INT >= 33) {
+                    requestPermissions(new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.NEARBY_WIFI_DEVICES
+                    }, CODE_LOCATION_PERMISSION);
+                } else {
+                    requestPermissions(new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    }, CODE_LOCATION_PERMISSION);
+                }
                 return;
             }
         }
