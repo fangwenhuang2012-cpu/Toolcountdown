@@ -18,9 +18,9 @@ import com.google.android.gms.location.Priority;
 
 public class VehicleSpeedMonitor {
     private static final String TAG = "VehicleSpeedMonitor";
-    private static final float STOP_SPEED_THRESHOLD_KMH = 5.0f; // km/h
-    private static final float MOVE_SPEED_THRESHOLD_KMH = 8.0f; // km/h
-    private static final long STOP_CONFIRM_DELAY_MS = 1500;
+    private static final float STOP_SPEED_THRESHOLD_KMH = 4.0f; // km/h
+    private static final float MOVE_SPEED_THRESHOLD_KMH = 7.0f; // km/h
+    private static final long STOP_CONFIRM_DELAY_MS = 1200;
 
     public interface SpeedListener {
         void onVehicleStopped();
@@ -40,32 +40,48 @@ public class VehicleSpeedMonitor {
     private Location lastLocation = null;
     private Runnable stopConfirmationRunnable;
 
-    // Bộ lọc Kalman Lọc Nhiễu GPS 1 chiều (1D Kalman Speed Filter)
+    // Bộ lọc Kalman Lọc Nhiễu Tốc độ GPS 1 Chiều (1D Kalman Speed Filter)
     private final KalmanSpeedFilter kalmanFilter = new KalmanSpeedFilter();
 
     private void handleNewLocation(Location location) {
         if (location == null) return;
 
+        // 1. Lọc bỏ tín hiệu vị trí có độ sai số quá cao (> 30m) hoặc định vị trạm phát sóng (Network) kém chính xác
+        if (location.hasAccuracy() && location.getAccuracy() > 30.0f) {
+            return;
+        }
+        if (LocationManager.NETWORK_PROVIDER.equals(location.getProvider()) && location.hasAccuracy() && location.getAccuracy() > 15.0f) {
+            return;
+        }
+
         float rawSpeedKmh = 0f;
 
-        // 1. Nếu thiết bị hỗ trợ hasSpeed() và getSpeed() > 0
-        if (location.hasSpeed() && location.getSpeed() > 0) {
+        // 2. Ưu tiên tốc độ thực đo từ phần cứng GPS nếu có
+        if (location.hasSpeed() && location.getSpeed() >= 0) {
             rawSpeedKmh = location.getSpeed() * 3.6f;
         } else if (lastLocation != null) {
-            // 2. Fallback thủ công: Tính tốc độ dựa trên khoảng cách (distanceTo) và chênh lệch thời gian
+            // 3. Dự phòng: Tính khoảng cách giữa 2 điểm GPS chuẩn
             float distanceMeters = lastLocation.distanceTo(location);
             long timeDeltaMs = location.getTime() - lastLocation.getTime();
 
-            if (timeDeltaMs > 100 && timeDeltaMs < 10000 && distanceMeters > 0.2f) {
+            if (timeDeltaMs >= 300 && timeDeltaMs < 10000 && distanceMeters > 0.3f) {
                 float calculatedMps = distanceMeters / (timeDeltaMs / 1000.0f);
                 rawSpeedKmh = calculatedMps * 3.6f;
             }
         }
 
+        // Triệt tiêu hiện tượng GPS Drift khi đứng yên (Tốc độ dưới 1.8 km/h coi như 0 km/h)
+        if (rawSpeedKmh < 1.8f) {
+            rawSpeedKmh = 0f;
+        }
+
         lastLocation = location;
 
-        // Lọc qua Kalman
+        // Lọc nhiễu qua Kalman Filter
         float smoothedSpeedKmh = kalmanFilter.update(rawSpeedKmh);
+        if (smoothedSpeedKmh < 1.0f) {
+            smoothedSpeedKmh = 0f;
+        }
 
         if (listener != null) {
             listener.onSpeedUpdated(smoothedSpeedKmh);
@@ -106,13 +122,14 @@ public class VehicleSpeedMonitor {
 
         kalmanFilter.reset();
         lastLocation = null;
+        boolean startedWithFused = false;
 
-        // 1. Thử dùng FusedLocationProviderClient (Google Play Services)
+        // 1. Thử dùng FusedLocationProviderClient (Ưu tiên GPS độ chính xác cao từ Google Services)
         if (fusedLocationClient != null) {
             try {
-                LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 400)
-                        .setMinUpdateIntervalMillis(250)
-                        .setMinUpdateDistanceMeters(0f)
+                LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500)
+                        .setMinUpdateIntervalMillis(300)
+                        .setMinUpdateDistanceMeters(0.1f)
                         .build();
 
                 fusedLocationCallback = new LocationCallback() {
@@ -126,41 +143,26 @@ public class VehicleSpeedMonitor {
 
                 fusedLocationClient.requestLocationUpdates(locationRequest, fusedLocationCallback, Looper.getMainLooper());
                 isMonitoring = true;
+                startedWithFused = true;
                 Log.d(TAG, "Đã khởi chạy FusedLocationProviderClient theo dõi tốc độ GPS.");
-            } catch (SecurityException e) {
-                Log.e(TAG, "Thiếu quyền vị trí GPS cho FusedLocation", e);
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi đăng ký FusedLocationProviderClient", e);
             }
         }
 
-        // 2. Dự phòng bằng LocationManager chuẩn (GPS_PROVIDER + NETWORK_PROVIDER + PASSIVE_PROVIDER)
-        try {
-            if (locationManager != null) {
+        // 2. Chỉ dùng LocationManager fallback khi FusedLocation KHÔNG khả dụng (tránh trùng lặp gây giật lag)
+        if (!startedWithFused && locationManager != null) {
+            try {
                 if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     locationManager.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER, 400, 0, locationListener, Looper.getMainLooper()
+                            LocationManager.GPS_PROVIDER, 500, 0.5f, locationListener, Looper.getMainLooper()
                     );
+                    isMonitoring = true;
+                    Log.d(TAG, "Đã khởi chạy LocationManager GPS_PROVIDER fallback.");
                 }
-                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                            LocationManager.NETWORK_PROVIDER, 400, 0, locationListener, Looper.getMainLooper()
-                    );
-                }
-                if (LocationManager.PASSIVE_PROVIDER != null) {
-                    try {
-                        locationManager.requestLocationUpdates(
-                                LocationManager.PASSIVE_PROVIDER, 400, 0, locationListener, Looper.getMainLooper()
-                        );
-                    } catch (Exception ignored) {}
-                }
-                isMonitoring = true;
-                Log.d(TAG, "Đã khởi chạy LocationManager fallback theo dõi tốc độ GPS.");
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi đăng ký LocationManager GPS_PROVIDER", e);
             }
-        } catch (SecurityException e) {
-            Log.e(TAG, "Thiếu quyền vị trí GPS cho LocationManager", e);
-        } catch (Exception e) {
-            Log.e(TAG, "Lỗi đăng ký LocationManager", e);
         }
     }
 
@@ -226,8 +228,8 @@ public class VehicleSpeedMonitor {
      * Bộ lọc Kalman Lọc Nhiễu Tốc độ GPS 1 Chiều (1D Kalman Speed Filter)
      */
     private static class KalmanSpeedFilter {
-        private float q = 0.15f; // Process Noise
-        private float r = 0.35f; // Measurement Noise (GPS Jitter)
+        private float q = 0.10f; // Process Noise
+        private float r = 0.40f; // Measurement Noise (GPS Jitter)
         private float p = 1.00f; // Estimation Error Covariance
         private float x = 0.00f; // Speed Estimate (km/h)
         private boolean initialized = false;
@@ -261,4 +263,5 @@ public class VehicleSpeedMonitor {
         }
     }
 }
+
 

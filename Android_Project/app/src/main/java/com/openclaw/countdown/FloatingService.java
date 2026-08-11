@@ -129,6 +129,8 @@ public class FloatingService extends Service {
         setupAIServices();
     }
 
+    private String lastPushedJs = "";
+
     private void pushStatusToUi() {
         mainHandler.post(new Runnable() {
             @Override
@@ -139,7 +141,10 @@ public class FloatingService extends Service {
                             currentStreamStatus.replace("'", "\\'") + "', '" +
                             currentGpsSpeed.replace("'", "\\'") + "', '" +
                             currentAiStatus.replace("'", "\\'") + "');}";
-                    webView.evaluateJavascript(js, null);
+                    if (!js.equals(lastPushedJs)) {
+                        lastPushedJs = js;
+                        webView.evaluateJavascript(js, null);
+                    }
                 }
             }
         });
