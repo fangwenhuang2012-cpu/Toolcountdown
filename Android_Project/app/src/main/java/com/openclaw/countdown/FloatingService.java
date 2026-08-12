@@ -39,6 +39,7 @@ public class FloatingService extends Service {
     private String currentStreamStatus = "Chưa kết nối luồng Camera";
     private String currentGpsSpeed = "0 km/h (Sẵn sàng)";
     private String currentAiStatus = "Đang chờ xe dừng hẳn";
+    private boolean isRedLightActive = false;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -101,8 +102,8 @@ public class FloatingService extends Service {
         int screenW = metrics.widthPixels;
         int screenH = metrics.heightPixels;
 
-        int defaultWidth = Math.min(Math.round(735 * density), screenW);
-        int defaultHeight = Math.min(Math.round(510 * density), screenH);
+        int defaultWidth = Math.min(Math.round(350 * density), screenW);
+        int defaultHeight = Math.min(Math.round(405 * density), screenH);
         int defaultX = Math.round(15 * density);
         int defaultY = Math.round(15 * density);
 
@@ -173,6 +174,7 @@ public class FloatingService extends Service {
         detector = new TrafficLightDetector(this, new TrafficLightDetector.DetectionListener() {
             @Override
             public void onRedLightCountdownDetected(final int seconds, float confidence) {
+                isRedLightActive = true;
                 currentAiStatus = "Đang soi đếm ngược: " + seconds + "s";
                 pushStatusToUi();
                 mainHandler.post(new Runnable() {
@@ -180,6 +182,12 @@ public class FloatingService extends Service {
                     public void run() {
                         if (webView != null) {
                             webView.evaluateJavascript("if(window.setCameraCountdown){window.setCameraCountdown(" + seconds + ");}", null);
+                            if (params != null && windowManager != null) {
+                                params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                try {
+                                    windowManager.updateViewLayout(webView, params);
+                                } catch (Exception e) {}
+                            }
                         }
                     }
                 });
@@ -187,6 +195,7 @@ public class FloatingService extends Service {
 
             @Override
             public void onRedLightEnded() {
+                isRedLightActive = false;
                 currentAiStatus = "Đèn xanh - Cho phép đi";
                 pushStatusToUi();
                 mainHandler.post(new Runnable() {
@@ -194,6 +203,17 @@ public class FloatingService extends Service {
                     public void run() {
                         if (webView != null) {
                             webView.evaluateJavascript("if(window.onRedLightEnded){window.onRedLightEnded();}", null);
+                            if (params != null && windowManager != null) {
+                                mainHandler.postDelayed(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                        try {
+                                            windowManager.updateViewLayout(webView, params);
+                                        } catch (Exception e) {}
+                                    }
+                                }, 800);
+                            }
                         }
                     }
                 });
@@ -214,15 +234,62 @@ public class FloatingService extends Service {
             @Override
             public void onVehicleStopped() {
                 currentGpsSpeed = "0 km/h (Đã dừng)";
-                currentAiStatus = "Xe dừng - AI đang soi camera";
+                if (isRedLightActive) {
+                    currentAiStatus = "Xe dừng - Tiếp tục đếm ngược";
+                } else {
+                    currentAiStatus = "Xe dừng - AI đang soi camera";
+                }
                 pushStatusToUi();
                 if (streamReader != null && !streamReader.isStreaming()) {
                     streamReader.startStreaming();
                 }
+                
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript("if(window.onVehicleStopped){window.onVehicleStopped();}", null);
+                            if (params != null && windowManager != null) {
+                                params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                try {
+                                    windowManager.updateViewLayout(webView, params);
+                                } catch (Exception e) {}
+                            }
+                        }
+                    }
+                });
             }
 
             @Override
             public void onVehicleMoving(float speedKmh) {
+                if (isRedLightActive) {
+                    if (speedKmh < 10.0f) {
+                        currentGpsSpeed = String.format("%.0f km/h (Đang nhích xe)", speedKmh);
+                        pushStatusToUi();
+                        return;
+                    } else {
+                        currentGpsSpeed = String.format("%.0f km/h (Vượt 10km/h - Ẩn HUD)", speedKmh);
+                        currentAiStatus = "Đang đếm ngầm (Background)";
+                        pushStatusToUi();
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (webView != null) {
+                                    webView.evaluateJavascript("if(window.onVehicleMovedBackground){window.onVehicleMovedBackground();}", null);
+                                    if (params != null && windowManager != null) {
+                                        params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                        try {
+                                            windowManager.updateViewLayout(webView, params);
+                                        } catch (Exception e) {}
+                                    }
+                                }
+                            }
+                        });
+                        return;
+                    }
+                }
+                isRedLightActive = false;
+                
                 currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
                 currentAiStatus = "Xe di chuyển - Ẩn đếm ngược";
                 pushStatusToUi();
@@ -234,6 +301,12 @@ public class FloatingService extends Service {
                     public void run() {
                         if (webView != null) {
                             webView.evaluateJavascript("if(window.onVehicleMoved){window.onVehicleMoved();}", null);
+                            if (params != null && windowManager != null) {
+                                params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                try {
+                                    windowManager.updateViewLayout(webView, params);
+                                } catch (Exception e) {}
+                            }
                         }
                     }
                 });
@@ -326,6 +399,36 @@ public class FloatingService extends Service {
                 @Override
                 public void run() {
                     stopSelf();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void hideWindow() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (params != null && windowManager != null) {
+                        params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                        try {
+                            windowManager.updateViewLayout(webView, params);
+                        } catch (Exception e) {}
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void resetDetector() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    isRedLightActive = false;
+                    if (detector != null) {
+                        detector.reset();
+                    }
+                    currentAiStatus = "Đã hết đèn đỏ (Reset AI)";
+                    pushStatusToUi();
                 }
             });
         }
