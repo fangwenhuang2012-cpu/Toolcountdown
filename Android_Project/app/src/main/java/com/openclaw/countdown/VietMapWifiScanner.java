@@ -104,6 +104,14 @@ public class VietMapWifiScanner {
                         @Override
                         public void onAvailable(android.net.Network network) {
                             Log.d(TAG, "Đã kết nối Wi-Fi Camera VietMap thành công!");
+                            // BIND PROCESS TO THIS NETWORK: 
+                            // This ensures our app uses the Dashcam Wi-Fi for streaming,
+                            // while allowing the rest of the Android OS (Google Maps, etc.) to keep using 4G/Cellular!
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                cm.bindProcessToNetwork(network);
+                            } else {
+                                ConnectivityManager.setProcessDefaultNetwork(network);
+                            }
                             if (listener != null) {
                                 listener.onConnectedToVietMapCam(ssid);
                             }

@@ -56,7 +56,7 @@ public class TrafficLightDetector {
 
             // 2. Nhận diện mốc giây đếm ngược bằng thuật toán 7-Segment LED OCR + Spatial Filter
             int seconds = detectCountdownSeconds(frame);
-            if (seconds >= 10 && seconds <= 99) {
+            if (seconds >= 1 && seconds <= 99) {
                 if (seconds == lastDetectedSeconds - 1 || lastDetectedSeconds == -1) {
                     consecutiveMatches++;
                     lastDetectedSeconds = seconds;
@@ -156,7 +156,7 @@ public class TrafficLightDetector {
                 if (redPixelCount >= 6 && (maxX - minX) > 6 && (maxY - minY) > 6) {
                     // Thử thuật toán phân tích LED 7 Đoạn trong Bounding Box
                     int ocrSeconds = decode7SegmentDigitPair(bitmap, minX, maxX, minY, maxY);
-                    if (ocrSeconds >= 10 && ocrSeconds <= 99) {
+                    if (ocrSeconds >= 1 && ocrSeconds <= 99) {
                         String laneName = (i == 0) ? "Làn Chính" : ((i == 1) ? "Làn Trái" : "Làn Phải");
                         Log.d(TAG, "OCR 7-Segment nhận diện thành công tại [" + laneName + "] -> " + ocrSeconds + "s");
                         return ocrSeconds;
@@ -164,7 +164,7 @@ public class TrafficLightDetector {
 
                     // Fallback thông minh: Ước tính nếu mẫu 7 đoạn bị lóa mờ
                     int estimatedSeconds = Math.min(99, Math.max(1, (redPixelCount * 3) / 8));
-                    if (estimatedSeconds >= 10 && estimatedSeconds <= 99) {
+                    if (estimatedSeconds >= 1 && estimatedSeconds <= 99) {
                         return estimatedSeconds;
                     }
                 }
@@ -189,8 +189,12 @@ public class TrafficLightDetector {
         int digit1 = decodeSingle7SegmentDigit(bitmap, minX, midX, minY, maxY);
         int digit2 = decodeSingle7SegmentDigit(bitmap, midX, maxX, minY, maxY);
 
-        if (digit1 >= 1 && digit1 <= 9 && digit2 >= 0 && digit2 <= 9) {
+        if (digit1 >= 0 && digit1 <= 9 && digit2 >= 0 && digit2 <= 9) {
             return digit1 * 10 + digit2;
+        } else if (digit1 == -1 && digit2 >= 0 && digit2 <= 9) {
+            return digit2; // Chỉ đọc được số bên phải
+        } else if (digit1 >= 0 && digit1 <= 9 && digit2 == -1) {
+            return digit1; // Chỉ đọc được số bên trái (trường hợp hiếm)
         }
 
         return -1;

@@ -447,7 +447,7 @@ html, body {
     font-weight: 600;
 }
 
-@media (max-width: 650px) {
+@media (max-width: 1px) { /* Disabled so panel always stays on right */
     .status-expanded-card {
         position: absolute;
         top: calc(100% + 10px);
@@ -456,6 +456,118 @@ html, body {
         height: auto;
     }
 }
+
+/* MINIMIZE (COLLAPSE) STATE */
+.floating-widget.collapsed {
+    width: auto !important;
+    height: auto !important;
+    min-height: unset;
+    border-radius: 30px;
+    padding: 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8), 0 0 15px var(--hud-glow-blue);
+    background: transparent;
+    border: none;
+}
+.floating-widget.collapsed .hud-body,
+.floating-widget.collapsed .status-expanded-card,
+.floating-widget.collapsed .resize-handle,
+.floating-widget.collapsed .widget-controls {
+    display: none !important;
+}
+.floating-widget.collapsed .widget-header {
+    border: none;
+    padding: 4px 6px;
+    background: transparent;
+}
+.floating-widget.collapsed .ai-live-badge-btn {
+    background: rgba(10, 14, 23, 0.9);
+    border-color: var(--blue-accent);
+    padding: 6px 12px;
+    border-radius: 20px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* WIFI PASSWORD PROMPT */
+.wifi-prompt-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    border-radius: 24px;
+}
+.wifi-prompt-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+.wifi-prompt-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 20px;
+    width: 85%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.wifi-prompt-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--blue-accent);
+    margin-bottom: 8px;
+}
+.wifi-prompt-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+.wifi-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    color: #fff;
+    font-family: var(--sans-font);
+    font-size: 0.85rem;
+    margin-bottom: 15px;
+    outline: none;
+}
+.wifi-input:focus {
+    border-color: var(--blue-accent);
+    box-shadow: 0 0 8px var(--hud-glow-blue);
+}
+.wifi-btn-group {
+    display: flex;
+    gap: 10px;
+}
+.wifi-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.wifi-btn-cancel {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+.wifi-btn-cancel:hover { background: rgba(255, 255, 255, 0.25); }
+.wifi-btn-submit {
+    background: var(--blue-accent);
+    color: #fff;
+}
+.wifi-btn-submit:hover { background: #0070e0; }
     </style>
 </head>
 <body>
@@ -533,6 +645,19 @@ html, body {
                 <line x1="19" y1="13" x2="13" y2="19"></line>
                 <line x1="19" y1="17" x2="17" y2="19"></line>
             </svg>
+        </div>
+
+        <!-- Wi-Fi Password Prompt Overlay -->
+        <div class="wifi-prompt-overlay" id="wifiPromptOverlay">
+            <div class="wifi-prompt-card">
+                <div class="wifi-prompt-title">KẾT NỐI CAMERA</div>
+                <div class="wifi-prompt-desc">Nhập mật khẩu cho mạng:<br/><strong id="wifiPromptSsid"></strong></div>
+                <input type="password" id="wifiPasswordInput" class="wifi-input" placeholder="Mật khẩu (thường là 12345678)" />
+                <div class="wifi-btn-group">
+                    <button class="wifi-btn wifi-btn-cancel" onclick="closeWifiPrompt()">Hủy</button>
+                    <button class="wifi-btn wifi-btn-submit" onclick="submitWifiPrompt()">Kết Nối</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -828,11 +953,26 @@ function handleCloseApp(e) {
     }
 }
 
+let isCollapsed = false;
+
+function handleRestoreApp() {
+    isCollapsed = false;
+    if (floatingWidget) floatingWidget.classList.remove('collapsed');
+    resizeAndroidWindow(false); // Restore base size
+}
+
 function handleHideApp(e) {
     if (e) e.stopPropagation();
-    if (floatingWidget) floatingWidget.classList.add('hidden');
-    if (window.AndroidBridge && window.AndroidBridge.hideWindow) {
-        window.AndroidBridge.hideWindow();
+    isCollapsed = true;
+    if (floatingWidget) floatingWidget.classList.add('collapsed');
+    
+    // Close status panel if open
+    const card = document.getElementById('statusExpandedCard');
+    if (card) card.classList.add('hidden');
+
+    // Resize window to small bubble size
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        window.AndroidBridge.updateWindowBounds(0, 0, 180, 50);
     }
 }
 
@@ -848,6 +988,10 @@ function resizeAndroidWindow(isExpanded) {
 
 function toggleStatusPanel(e) {
     if (e) e.stopPropagation();
+    if (isCollapsed) {
+        handleRestoreApp();
+        return;
+    }
     const card = document.getElementById('statusExpandedCard');
     if (card) {
         const isHidden = card.classList.contains('hidden');
@@ -866,6 +1010,47 @@ function checkEnvironment() {
         document.body.classList.add('is-android-app');
     }
 }
+
+let currentPromptSsid = "";
+
+window.showWifiPasswordPrompt = function(ssid) {
+    console.log("[VietMap AI HUD] Show Wi-Fi password prompt for:", ssid);
+    currentPromptSsid = ssid;
+    const overlay = document.getElementById('wifiPromptOverlay');
+    const ssidLabel = document.getElementById('wifiPromptSsid');
+    const input = document.getElementById('wifiPasswordInput');
+    
+    if (ssidLabel) ssidLabel.textContent = ssid;
+    if (input) {
+        input.value = "12345678"; // Default VietMap Cam password
+        // focus logic can't work well without user interaction, but we set default
+    }
+    
+    if (overlay) overlay.classList.add('active');
+    
+    if (floatingWidget) floatingWidget.classList.remove('hidden');
+    if (isCollapsed) handleRestoreApp();
+};
+
+window.closeWifiPrompt = function() {
+    const overlay = document.getElementById('wifiPromptOverlay');
+    if (overlay) overlay.classList.remove('active');
+};
+
+window.submitWifiPrompt = function() {
+    const input = document.getElementById('wifiPasswordInput');
+    if (input && input.value) {
+        if (window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
+            window.AndroidBridge.submitWifiPassword(currentPromptSsid, input.value);
+            
+            const valWifi = document.getElementById('valWifi');
+            if (valWifi) valWifi.textContent = "Đang kết nối: " + currentPromptSsid;
+        }
+        window.closeWifiPrompt();
+    } else {
+        if (input) input.focus();
+    }
+};
 
 window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus) {
     const valWifi = document.getElementById('valWifi');
@@ -913,8 +1098,8 @@ if (document.readyState === 'loading') {
 }
 
 window.setCameraCountdown = function(seconds) {
-    if (typeof seconds !== 'number' || seconds < 10 || seconds > 99) {
-        console.log("[VietMap AI HUD] Ignored initial countdown < 10s or invalid:", seconds);
+    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 999) {
+        console.log("[VietMap AI HUD] Ignored initial countdown <= 0 or invalid:", seconds);
         return;
     }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
@@ -925,19 +1110,26 @@ window.setCameraCountdown = function(seconds) {
     if (floatingWidget) {
         floatingWidget.classList.remove('hidden');
     }
+    if (isCollapsed) {
+        handleRestoreApp();
+    }
 
     startTimer();
 };
 
 window.onVehicleStopped = function() {
-    console.log("[VietMap AI HUD] Vehicle stopped - showing HUD");
+    console.log("[VietMap AI HUD] Vehicle stopped - showing simple HUD");
     if (floatingWidget) {
         floatingWidget.classList.remove('hidden');
+    }
+    // Show as simple (collapsed) until AI detects red light
+    if (!isRunning) {
+        handleHideApp();
     }
 };
 
 window.onVehicleMoved = function() {
-    console.log("[VietMap AI HUD] Vehicle moved - hiding HUD");
+    console.log("[VietMap AI HUD] Vehicle moved - hiding HUD entirely");
     stopTimer();
     if (floatingWidget) {
         floatingWidget.classList.add('hidden');
@@ -956,12 +1148,15 @@ window.onRedLightEnded = function() {
     stopTimer();
     countdownTime = 0;
     updateDisplay();
+    const statusText = document.getElementById('statusText');
+    const statusIcon = document.getElementById('statusIcon');
     if (statusText) statusText.textContent = "ĐÈN XANH - ĐƯỢC PHÉP ĐI";
     if (statusIcon) statusIcon.textContent = "🟢";
 
     playFinishAlarm();
     setTimeout(() => {
-        if (floatingWidget) floatingWidget.classList.add('hidden');
+        // Sau khi đếm xong, hạ xuống dạng simple (collapsed) để chờ tiếp
+        handleHideApp();
     }, 800);
 };
     </script>

@@ -153,10 +153,29 @@ public class FloatingService extends Service {
 
     private void setupAIServices() {
         wifiScanner = new VietMapWifiScanner(this, new VietMapWifiScanner.WifiScanListener() {
+            private String lastPromptedSsid = null;
+
             @Override
-            public void onVietMapCamFound(String ssid, int signalLevel) {
+            public void onVietMapCamFound(final String ssid, int signalLevel) {
                 currentWifiSsid = "Phát hiện: " + ssid;
                 pushStatusToUi();
+
+                android.content.SharedPreferences prefs = getSharedPreferences("VietMapConfig", MODE_PRIVATE);
+                String savedPass = prefs.getString("wifi_pass_" + ssid, null);
+                
+                if (savedPass != null) {
+                    wifiScanner.connectToVietMapCam(ssid, savedPass);
+                } else if (!ssid.equals(lastPromptedSsid)) {
+                    lastPromptedSsid = ssid;
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (webView != null) {
+                                webView.evaluateJavascript("if(window.showWifiPasswordPrompt){window.showWifiPasswordPrompt('" + ssid + "');}", null);
+                            }
+                        }
+                    });
+                }
             }
 
             @Override
@@ -429,6 +448,20 @@ public class FloatingService extends Service {
                     }
                     currentAiStatus = "Đã hết đèn đỏ (Reset AI)";
                     pushStatusToUi();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void submitWifiPassword(final String ssid, final String password) {
+            android.content.SharedPreferences prefs = getSharedPreferences("VietMapConfig", MODE_PRIVATE);
+            prefs.edit().putString("wifi_pass_" + ssid, password).apply();
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (wifiScanner != null) {
+                        wifiScanner.connectToVietMapCam(ssid, password);
+                    }
                 }
             });
         }
