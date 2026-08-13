@@ -310,7 +310,7 @@ public class FloatingService extends Service {
                 isRedLightActive = false;
                 
                 currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
-                currentAiStatus = "Xe di chuyển - Ẩn đếm ngược";
+                currentAiStatus = "Xe di chuyển - Thu nhỏ HUD";
                 pushStatusToUi();
                 if (detector != null) {
                     detector.reset();
@@ -319,9 +319,11 @@ public class FloatingService extends Service {
                     @Override
                     public void run() {
                         if (webView != null) {
-                            webView.evaluateJavascript("if(window.onVehicleMoved){window.onVehicleMoved();}", null);
+                            // Collapse về bubble nhỏ thay vì ẩn hẳn → người dùng vẫn bấm xem báo cáo được
+                            webView.evaluateJavascript("if(window.onVehicleMovedBackground){window.onVehicleMovedBackground();}", null);
                             if (params != null && windowManager != null) {
-                                params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                                // Giữ nguyên FLAG_NOT_FOCUSABLE nhưng bỏ FLAG_NOT_TOUCHABLE để bấm được
+                                params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
                                 try {
                                     windowManager.updateViewLayout(webView, params);
                                 } catch (Exception e) {}
@@ -418,6 +420,27 @@ public class FloatingService extends Service {
                 @Override
                 public void run() {
                     stopSelf();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setWindowFocusable(final boolean focusable) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (windowManager != null && webView != null && params != null) {
+                        if (focusable) {
+                            // Bật focus: cho phép nhập bàn phím (ví dụ: nhập mật khẩu Wi-Fi)
+                            params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                        } else {
+                            // Tắt focus: trở lại overlay không chặn cảm ứng bín dưới
+                            params.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                        }
+                        try {
+                            windowManager.updateViewLayout(webView, params);
+                        } catch (Exception e) {}
+                    }
                 }
             });
         }

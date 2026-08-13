@@ -1023,10 +1023,14 @@ window.showWifiPasswordPrompt = function(ssid) {
     if (ssidLabel) ssidLabel.textContent = ssid;
     if (input) {
         input.value = "12345678"; // Default VietMap Cam password
-        // focus logic can't work well without user interaction, but we set default
     }
     
     if (overlay) overlay.classList.add('active');
+    
+    // Bật focusable để bàn phím Android hiện được khi nhập mật khẩu
+    if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+        window.AndroidBridge.setWindowFocusable(true);
+    }
     
     if (floatingWidget) floatingWidget.classList.remove('hidden');
     if (isCollapsed) handleRestoreApp();
@@ -1035,6 +1039,10 @@ window.showWifiPasswordPrompt = function(ssid) {
 window.closeWifiPrompt = function() {
     const overlay = document.getElementById('wifiPromptOverlay');
     if (overlay) overlay.classList.remove('active');
+    // Trả lại NOT_FOCUSABLE sau khi đóng prompt
+    if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+        window.AndroidBridge.setWindowFocusable(false);
+    }
 };
 
 window.submitWifiPrompt = function() {
@@ -1137,9 +1145,10 @@ window.onVehicleMoved = function() {
 };
 
 window.onVehicleMovedBackground = function() {
-    console.log("[VietMap AI HUD] Vehicle moved > 10km/h - hiding HUD but timer continues");
-    if (floatingWidget) {
-        floatingWidget.classList.add('hidden');
+    console.log("[VietMap AI HUD] Vehicle moved >10km/h - collapse to bubble, timer continues");
+    // Thu nhỏ về bubble thay vì ẩn hẳn: người dùng vẫn bấm được để xem báo cáo
+    if (!isCollapsed) {
+        handleHideApp();
     }
 };
 
