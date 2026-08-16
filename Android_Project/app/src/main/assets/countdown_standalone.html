@@ -1126,13 +1126,13 @@ window.setCameraCountdown = function(seconds) {
 };
 
 window.onVehicleStopped = function() {
-    console.log("[VietMap AI HUD] Vehicle stopped - showing simple HUD");
+    console.log("[VietMap AI HUD] Vehicle stopped - showing full HUD");
     if (floatingWidget) {
         floatingWidget.classList.remove('hidden');
     }
-    // Show as simple (collapsed) until AI detects red light
-    if (!isRunning) {
-        handleHideApp();
+    // Người dùng yêu cầu: "dừng xe thì tool hiện lên, hiện to, k phải chỉ cái tiêu đề"
+    if (typeof handleRestoreApp === 'function') {
+        handleRestoreApp();
     }
 };
 

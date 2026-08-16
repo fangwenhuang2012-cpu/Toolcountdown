@@ -60,17 +60,22 @@ public class VietMapWifiScanner {
                 try {
                     List<ScanResult> results = wifiManager.getScanResults();
                     boolean found = false;
+                    ScanResult bestMatch = null;
                     if (results != null) {
                         for (ScanResult result : results) {
                             if (result.SSID != null && isVietMapSSID(result.SSID)) {
-                                Log.d(TAG, "Tìm thấy Camera VietMap Wi-Fi: " + result.SSID);
-                                if (listener != null) {
-                                    listener.onVietMapCamFound(result.SSID, result.level);
+                                if (bestMatch == null || result.level > bestMatch.level) {
+                                    bestMatch = result;
                                 }
-                                found = true;
-                                break; // Stop after finding one
                             }
                         }
+                    }
+                    if (bestMatch != null) {
+                        Log.d(TAG, "Tìm thấy Camera VietMap Wi-Fi mạnh nhất: " + bestMatch.SSID + " (Tín hiệu: " + bestMatch.level + ")");
+                        if (listener != null) {
+                            listener.onVietMapCamFound(bestMatch.SSID, bestMatch.level);
+                        }
+                        found = true;
                     }
                     if (!found && attempts < 2) { // Try for 10 seconds
                         wifiManager.startScan();
@@ -93,8 +98,9 @@ public class VietMapWifiScanner {
 
     private boolean isVietMapSSID(String ssid) {
         if (ssid == null) return false;
+        String ssidLower = ssid.toLowerCase();
         for (String keyword : VIETMAP_KEYWORDS) {
-            if (ssid.contains(keyword)) {
+            if (ssidLower.contains(keyword.toLowerCase())) {
                 return true;
             }
         }
