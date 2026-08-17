@@ -483,9 +483,19 @@ html, body {
                 <button class="card-close-btn" onclick="toggleStatusPanel(event)">✖</button>
             </div>
             <div class="card-body">
-                <div class="status-item">
-                    <span class="item-label">📶 Wi-Fi Kết Nối:</span>
-                    <span class="item-val val-wifi" id="valWifi">Đang dò Wi-Fi...</span>
+                <div class="status-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span class="item-label">📶 Wi-Fi Kết Nối:</span>
+                        <span class="item-val val-wifi" id="valWifi">Đang dò Wi-Fi...</span>
+                    </div>
+                    <div id="wifiPassContainer" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <span class="item-label" style="font-size: 0.85em; color: #ffeb3b;">Nhập mật khẩu (nếu khác 12345678):</span>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="wifiPassInput" placeholder="12345678" style="flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #444; background: rgba(0,0,0,0.5); color: #fff; font-size: 14px; min-width: 0;" />
+                            <button onclick="submitWifiPass()" style="padding: 6px 12px; border-radius: 4px; background: #2196F3; color: #fff; border: none; font-weight: bold; cursor: pointer; white-space: nowrap;">Kết Nối</button>
+                        </div>
+                        <button onclick="openWifiSettings()" style="padding: 6px 12px; border-radius: 4px; background: #555; color: #fff; border: none; font-size: 0.85em; cursor: pointer; margin-top: 4px;">Mở Cài Đặt Wi-Fi Máy</button>
+                    </div>
                 </div>
                 <div class="status-item">
                     <span class="item-label">📹 Tình Hình Video:</span>
@@ -558,6 +568,7 @@ let audioEnabled = safeStorage.getItem('openclaw_countdown_audio') !== 'false';
 let audioCtx = null;
 let tickerTimer = null;
 let lastBeepedMilestone = -1;
+let currentDetectedSsid = "";
 
 let floatingWidget, widgetHeader, digitalDisplay, digit1, digit2;
 let statusText, statusIcon, statusBadge, progressFill, audioBtn;
@@ -834,10 +845,31 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
     const valStream = document.getElementById('valStream');
     const valGps = document.getElementById('valGps');
     const valAi = document.getElementById('valAi');
+    const wifiPassContainer = document.getElementById('wifiPassContainer');
     const chipText = document.getElementById('chipText');
     const chipDot = document.getElementById('chipDot');
 
-    if (valWifi && wifiSsid) valWifi.textContent = wifiSsid;
+    if (valWifi && wifiSsid) {
+        valWifi.textContent = wifiSsid;
+        
+        // Hiện khung nhập mật khẩu nếu đang ở trạng thái "Phát hiện"
+        if (wifiSsid.startsWith("Phát hiện: ")) {
+            currentDetectedSsid = wifiSsid.substring(11).trim();
+            if (wifiPassContainer) wifiPassContainer.style.display = 'flex';
+            // Cho phép focus để người dùng có thể gõ bàn phím
+            if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+                window.AndroidBridge.setWindowFocusable(true);
+            }
+        } else {
+            currentDetectedSsid = "";
+            if (wifiPassContainer) wifiPassContainer.style.display = 'none';
+            // Tắt focus để trả lại cảm ứng cho màn hình bên dưới nếu không cần nhập liệu
+            if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+                window.AndroidBridge.setWindowFocusable(false);
+            }
+        }
+    }
+
     if (valStream && streamStatus) valStream.textContent = streamStatus;
     if (valGps && gpsSpeed !== undefined) valGps.textContent = gpsSpeed;
     if (valAi && aiStatus) valAi.textContent = aiStatus;
@@ -853,6 +885,25 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
             chipText.textContent = "📡 VietMap AI: " + (wifiSsid || "Đang dò Wi-Fi");
             if (chipDot) chipDot.className = "status-chip-dot yellow";
         }
+    }
+};
+
+window.submitWifiPass = function() {
+    const input = document.getElementById('wifiPassInput');
+    let pass = input ? input.value.trim() : "";
+    if (!pass) pass = "12345678"; // Default password
+    
+    if (currentDetectedSsid && window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
+        const valWifi = document.getElementById('valWifi');
+        if (valWifi) valWifi.textContent = "Đang thử kết nối...";
+        window.AndroidBridge.submitWifiPassword(currentDetectedSsid, pass);
+    }
+};
+
+window.openWifiSettings = function() {
+    if (window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
+        // Triggering the open settings fallback by sending a generic SSID that we catch in Java
+        window.AndroidBridge.submitWifiPassword("Camera VietMap", "");
     }
 };
 

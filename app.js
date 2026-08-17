@@ -31,6 +31,7 @@ let audioEnabled = safeStorage.getItem('openclaw_countdown_audio') !== 'false';
 let audioCtx = null;
 let tickerTimer = null;
 let lastBeepedMilestone = -1;
+let currentDetectedSsid = "";
 
 let floatingWidget, widgetHeader, digitalDisplay, digit1, digit2;
 let statusText, statusIcon, statusBadge, progressFill, audioBtn;
@@ -310,11 +311,51 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
     const valStream = document.getElementById('valStream');
     const valGps = document.getElementById('valGps');
     const valAi = document.getElementById('valAi');
+    const wifiPassContainer = document.getElementById('wifiPassContainer');
 
-    if (valWifi && wifiSsid) valWifi.textContent = wifiSsid;
+    if (valWifi && wifiSsid) {
+        valWifi.textContent = wifiSsid;
+        
+        // Hiện khung nhập mật khẩu nếu đang ở trạng thái "Phát hiện"
+        if (wifiSsid.startsWith("Phát hiện: ")) {
+            currentDetectedSsid = wifiSsid.substring(11).trim();
+            if (wifiPassContainer) wifiPassContainer.style.display = 'flex';
+            // Cho phép focus để người dùng có thể gõ bàn phím
+            if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+                window.AndroidBridge.setWindowFocusable(true);
+            }
+        } else {
+            currentDetectedSsid = "";
+            if (wifiPassContainer) wifiPassContainer.style.display = 'none';
+            // Tắt focus để trả lại cảm ứng cho màn hình bên dưới nếu không cần nhập liệu
+            if (window.AndroidBridge && window.AndroidBridge.setWindowFocusable) {
+                window.AndroidBridge.setWindowFocusable(false);
+            }
+        }
+    }
+
     if (valStream && streamStatus) valStream.textContent = streamStatus;
     if (valGps && gpsSpeed !== undefined) valGps.textContent = gpsSpeed;
     if (valAi && aiStatus) valAi.textContent = aiStatus;
+};
+
+window.submitWifiPass = function() {
+    const input = document.getElementById('wifiPassInput');
+    let pass = input ? input.value.trim() : "";
+    if (!pass) pass = "12345678"; // Default password
+    
+    if (currentDetectedSsid && window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
+        const valWifi = document.getElementById('valWifi');
+        if (valWifi) valWifi.textContent = "Đang thử kết nối...";
+        window.AndroidBridge.submitWifiPassword(currentDetectedSsid, pass);
+    }
+};
+
+window.openWifiSettings = function() {
+    if (window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
+        // Triggering the open settings fallback by sending a generic SSID that we catch in Java
+        window.AndroidBridge.submitWifiPassword("Camera VietMap", "");
+    }
 };
 
 function init() {
