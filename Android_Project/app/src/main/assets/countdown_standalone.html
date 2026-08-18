@@ -54,8 +54,8 @@ html, body {
 
 .floating-widget {
     position: fixed;
-    top: 20px;
-    left: 20px;
+    top: 25px;
+    left: 25px;
     width: 300px;
     height: 340px;
     background: var(--hud-bg);
@@ -447,7 +447,7 @@ html, body {
     font-weight: 600;
 }
 
-@media (max-width: 650px) {
+@media (max-width: 1px) { /* Disabled so panel always stays on right */
     .status-expanded-card {
         position: absolute;
         top: calc(100% + 10px);
@@ -456,6 +456,38 @@ html, body {
         height: auto;
     }
 }
+
+/* MINIMIZE (COLLAPSE) STATE */
+.floating-widget.collapsed {
+    width: auto !important;
+    height: auto !important;
+    min-height: unset;
+    border-radius: 30px;
+    padding: 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8), 0 0 15px var(--hud-glow-blue);
+    background: transparent;
+    border: none;
+}
+.floating-widget.collapsed .hud-body,
+.floating-widget.collapsed .status-expanded-card,
+.floating-widget.collapsed .resize-handle,
+.floating-widget.collapsed .widget-controls {
+    display: none !important;
+}
+.floating-widget.collapsed .widget-header {
+    border: none;
+    padding: 4px 6px;
+    background: transparent;
+}
+.floating-widget.collapsed .ai-live-badge-btn {
+    background: rgba(10, 14, 23, 0.9);
+    border-color: var(--blue-accent);
+    padding: 6px 12px;
+    border-radius: 20px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+
     </style>
 </head>
 <body>
@@ -472,7 +504,8 @@ html, body {
             <div class="widget-controls">
                 <button class="icon-btn" id="infoBtn" onclick="toggleStatusPanel(event)" title="Xem Báo cáo Trạng thái">📊</button>
                 <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)" title="Bật/Tắt Âm Thanh">🔊</button>
-                <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Tool">✖</button>
+                <button class="icon-btn" onclick="handleHideApp(event)" title="Ẩn HUD tạm thời">➖</button>
+                <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Hoàn Toàn Tool">✖</button>
             </div>
         </div>
 
@@ -543,6 +576,8 @@ html, body {
                 <line x1="19" y1="17" x2="17" y2="19"></line>
             </svg>
         </div>
+
+
     </div>
 
     <script>
@@ -732,6 +767,10 @@ function tick() {
         if (statusText) statusText.textContent = "ĐÈN XANH - ĐƯỢC PHÉP ĐI";
         if (statusIcon) statusIcon.textContent = "🟢";
 
+        if (window.AndroidBridge && window.AndroidBridge.resetDetector) {
+            window.AndroidBridge.resetDetector();
+        }
+
         setTimeout(() => {
             if (floatingWidget) floatingWidget.classList.add('hidden');
         }, 800);
@@ -775,26 +814,34 @@ function stopTimer() {
 
 function makeDraggable(element, handle) {
     let isDragging = false;
-    let startX = 0, startY = 0;
-    let initialX = 20, initialY = 20;
+    let startScreenX = 0, startScreenY = 0;
 
     const onStart = (e) => {
         isDragging = true;
         element.classList.add('is-dragging');
-        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        startX = clientX - initialX;
-        startY = clientY - initialY;
+        startScreenX = e.type.includes('touch') ? e.touches[0].screenX : e.screenX;
+        startScreenY = e.type.includes('touch') ? e.touches[0].screenY : e.screenY;
     };
 
     const onMove = (e) => {
         if (!isDragging) return;
-        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        initialX = clientX - startX;
-        initialY = clientY - startY;
-        element.style.left = initialX + 'px';
-        element.style.top = initialY + 'px';
+        if (e.cancelable) e.preventDefault();
+        const currentScreenX = e.type.includes('touch') ? e.touches[0].screenX : e.screenX;
+        const currentScreenY = e.type.includes('touch') ? e.touches[0].screenY : e.screenY;
+        
+        const dx = currentScreenX - startScreenX;
+        const dy = currentScreenY - startScreenY;
+        
+        if (window.AndroidBridge && window.AndroidBridge.moveWindow) {
+            window.AndroidBridge.moveWindow(Math.round(dx * window.devicePixelRatio), Math.round(dy * window.devicePixelRatio));
+        } else {
+            const rect = element.getBoundingClientRect();
+            element.style.left = (rect.left + dx) + 'px';
+            element.style.top = (rect.top + dy) + 'px';
+        }
+        
+        startScreenX = currentScreenX;
+        startScreenY = currentScreenY;
     };
 
     const onEnd = () => {
@@ -807,7 +854,7 @@ function makeDraggable(element, handle) {
     document.addEventListener('mouseup', onEnd);
 
     handle.addEventListener('touchstart', onStart, { passive: true });
-    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
 }
 
@@ -826,11 +873,55 @@ function handleCloseApp(e) {
     }
 }
 
+let isCollapsed = false;
+
+function handleRestoreApp() {
+    isCollapsed = false;
+    if (floatingWidget) floatingWidget.classList.remove('collapsed');
+    resizeAndroidWindow(false); // Restore base size
+}
+
+function handleHideApp(e) {
+    if (e) e.stopPropagation();
+    isCollapsed = true;
+    if (floatingWidget) floatingWidget.classList.add('collapsed');
+    
+    // Close status panel if open
+    const card = document.getElementById('statusExpandedCard');
+    if (card) card.classList.add('hidden');
+
+    // Resize window to small bubble size
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        window.AndroidBridge.updateWindowBounds(0, 0, 180, 50);
+    }
+}
+
+function resizeAndroidWindow(isExpanded) {
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        const baseWidth = 350; 
+        const expandedWidth = 642;
+        const height = 405;
+        const width = isExpanded ? expandedWidth : baseWidth;
+        window.AndroidBridge.updateWindowBounds(0, 0, width, height);
+    }
+}
+
 function toggleStatusPanel(e) {
     if (e) e.stopPropagation();
+    if (isCollapsed) {
+        handleRestoreApp();
+        return;
+    }
     const card = document.getElementById('statusExpandedCard');
     if (card) {
-        card.classList.toggle('hidden');
+        const isHidden = card.classList.contains('hidden');
+        if (isHidden) {
+            card.classList.remove('hidden');
+            resizeAndroidWindow(true);
+        } else {
+            card.classList.add('hidden');
+            resizeAndroidWindow(false);
+        }
     }
 }
 
@@ -916,6 +1007,7 @@ function init() {
     if (audioBtn) {
         audioBtn.textContent = audioEnabled ? '🔊' : '🔇';
     }
+    resizeAndroidWindow(false);
 }
 
 if (document.readyState === 'loading') {
@@ -925,8 +1017,8 @@ if (document.readyState === 'loading') {
 }
 
 window.setCameraCountdown = function(seconds) {
-    if (typeof seconds !== 'number' || seconds < 10 || seconds > 99) {
-        console.log("[VietMap AI HUD] Ignored initial countdown < 10s or invalid:", seconds);
+    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 999) {
+        console.log("[VietMap AI HUD] Ignored initial countdown <= 0 or invalid:", seconds);
         return;
     }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
@@ -937,15 +1029,37 @@ window.setCameraCountdown = function(seconds) {
     if (floatingWidget) {
         floatingWidget.classList.remove('hidden');
     }
+    if (isCollapsed) {
+        handleRestoreApp();
+    }
 
     startTimer();
 };
 
+window.onVehicleStopped = function() {
+    console.log("[VietMap AI HUD] Vehicle stopped - showing full HUD");
+    if (floatingWidget) {
+        floatingWidget.classList.remove('hidden');
+    }
+    // Người dùng yêu cầu: "dừng xe thì tool hiện lên, hiện to, k phải chỉ cái tiêu đề"
+    if (typeof handleRestoreApp === 'function') {
+        handleRestoreApp();
+    }
+};
+
 window.onVehicleMoved = function() {
-    console.log("[VietMap AI HUD] Vehicle moved - hiding HUD");
+    console.log("[VietMap AI HUD] Vehicle moved - hiding HUD entirely");
     stopTimer();
     if (floatingWidget) {
         floatingWidget.classList.add('hidden');
+    }
+};
+
+window.onVehicleMovedBackground = function() {
+    console.log("[VietMap AI HUD] Vehicle moved >10km/h - collapse to bubble, timer continues");
+    // Thu nhỏ về bubble thay vì ẩn hẳn: người dùng vẫn bấm được để xem báo cáo
+    if (!isCollapsed) {
+        handleHideApp();
     }
 };
 
@@ -954,12 +1068,15 @@ window.onRedLightEnded = function() {
     stopTimer();
     countdownTime = 0;
     updateDisplay();
+    const statusText = document.getElementById('statusText');
+    const statusIcon = document.getElementById('statusIcon');
     if (statusText) statusText.textContent = "ĐÈN XANH - ĐƯỢC PHÉP ĐI";
     if (statusIcon) statusIcon.textContent = "🟢";
 
     playFinishAlarm();
     setTimeout(() => {
-        if (floatingWidget) floatingWidget.classList.add('hidden');
+        // Sau khi đếm xong, hạ xuống dạng simple (collapsed) để chờ tiếp
+        handleHideApp();
     }, 800);
 };
     </script>
