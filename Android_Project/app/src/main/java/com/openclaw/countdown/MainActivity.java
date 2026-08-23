@@ -19,14 +19,81 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        Intent intent = getIntent();
+        if (intent != null && intent.hasExtra("CONNECT_WIFI_SSID")) {
+            String ssid = intent.getStringExtra("CONNECT_WIFI_SSID");
+            String password = intent.getStringExtra("CONNECT_WIFI_PASS");
+            connectWifiWithSpecifier(ssid, password);
+            return; // Stay open until connected or cancelled
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Vui lòng cấp quyền 'Vẽ lên ứng dụng khác' (Overlay) để Đếm Ngược AI VietMap hiển thị", Toast.LENGTH_LONG).show();
-            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Intent overlayIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
-            startActivityForResult(intent, CODE_DRAW_OVER_OTHER_APP_PERMISSION);
+            startActivityForResult(overlayIntent, CODE_DRAW_OVER_OTHER_APP_PERMISSION);
         } else {
             checkLocationPermissionAndStart();
+        }
+    }
+    
+    private void connectWifiWithSpecifier(final String ssid, final String password) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                android.net.wifi.WifiNetworkSpecifier specifier = new android.net.wifi.WifiNetworkSpecifier.Builder()
+                        .setSsid(ssid)
+                        .setWpa2Passphrase(password)
+                        .build();
+
+                android.net.NetworkRequest request = new android.net.NetworkRequest.Builder()
+                        .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                        .removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .setNetworkSpecifier(specifier)
+                        .build();
+
+                final android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
+                if (cm != null) {
+                    Toast.makeText(this, "Vui lòng chọn 'Kết nối' với Camera VietMap", Toast.LENGTH_LONG).show();
+                    cm.requestNetwork(request, new android.net.ConnectivityManager.NetworkCallback() {
+                        @Override
+                        public void onAvailable(android.net.Network network) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                cm.bindProcessToNetwork(network);
+                            } else {
+                                android.net.ConnectivityManager.setProcessDefaultNetwork(network);
+                            }
+                            
+                            // Send broadcast or just finish, the FloatingService's scanner might not catch it,
+                            // but the network is bound. Let's finish the activity.
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this, "Đã kết nối thành công!", Toast.LENGTH_SHORT).show();
+                                    finish();
+                                }
+                            });
+                        }
+                        @Override
+                        public void onUnavailable() {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this, "Hủy kết nối Wi-Fi", Toast.LENGTH_SHORT).show();
+                                    finish();
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    finish();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                finish();
+            }
+        } else {
+            finish();
         }
     }
 

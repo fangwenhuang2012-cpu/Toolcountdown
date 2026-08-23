@@ -127,37 +127,33 @@ public class VietMapWifiScanner {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                WifiNetworkSpecifier specifier = new WifiNetworkSpecifier.Builder()
-                        .setSsid(ssid)
-                        .setWpa2Passphrase(password)
-                        .build();
-
-                NetworkRequest request = new NetworkRequest.Builder()
-                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                        .setNetworkSpecifier(specifier)
-                        .build();
-
-                ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-                if (cm != null) {
-                    cm.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
-                        @Override
-                        public void onAvailable(android.net.Network network) {
-                            Log.d(TAG, "Đã kết nối Wi-Fi Camera VietMap thành công!");
-                            // BIND PROCESS TO THIS NETWORK: 
-                            // This ensures our app uses the Dashcam Wi-Fi for streaming,
-                            // while allowing the rest of the Android OS (Google Maps, etc.) to keep using 4G/Cellular!
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                cm.bindProcessToNetwork(network);
-                            } else {
-                                ConnectivityManager.setProcessDefaultNetwork(network);
-                            }
-                            if (listener != null) {
-                                listener.onConnectedToVietMapCam(ssid);
-                            }
-                        }
-                    });
+                // Background services cannot show WifiNetworkSpecifier dialog on Android 10+
+                // We launch MainActivity which is an Activity to request the network
+                android.content.Intent intent = new android.content.Intent(context, MainActivity.class);
+                intent.putExtra("CONNECT_WIFI_SSID", ssid);
+                intent.putExtra("CONNECT_WIFI_PASS", password);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                context.startActivity(intent);
+                
+                // Keep the UI informed
+                if (listener != null) {
+                    listener.onError("Đã hiện popup Cài đặt Wifi... (Chọn Connect/Kết Nối)");
                 }
+
+                // Note: MainActivity handles the requestNetwork and bindProcessToNetwork.
+                // It's in the same process, so the binding applies to our FloatingService as well.
+                // We will poll or wait for the system to change network status.
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        String current = getCurrentWifiSSID();
+                        if (current != null && current.equals(ssid)) {
+                            if (listener != null) listener.onConnectedToVietMapCam(ssid);
+                        } else {
+                            if (listener != null) listener.onError("Đang chờ xác nhận từ hộp thoại Wifi...");
+                        }
+                    }
+                }, 5000);
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 10+)", e);
             }

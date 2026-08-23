@@ -179,7 +179,10 @@ public class FloatingService extends Service {
             }
 
             @Override
-            public void onError(String errorMsg) {}
+            public void onError(String errorMsg) {
+                currentWifiSsid = errorMsg;
+                pushStatusToUi();
+            }
         });
         currentWifiSsid = wifiScanner.getCurrentWifiSSID();
         wifiScanner.scanForVietMapCam();
