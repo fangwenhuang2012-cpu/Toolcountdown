@@ -64,12 +64,14 @@ public class MainActivity extends Activity {
                                 android.net.ConnectivityManager.setProcessDefaultNetwork(network);
                             }
                             
-                            // Send broadcast or just finish, the FloatingService's scanner might not catch it,
-                            // but the network is bound. Let's finish the activity.
+                            // Send broadcast so FloatingService knows it's connected
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
                                     Toast.makeText(MainActivity.this, "Đã kết nối thành công!", Toast.LENGTH_SHORT).show();
+                                    Intent intent = new Intent("com.openclaw.countdown.WIFI_CONNECTED");
+                                    intent.putExtra("ssid", ssid);
+                                    sendBroadcast(intent);
                                     finish();
                                 }
                             });
@@ -80,6 +82,8 @@ public class MainActivity extends Activity {
                                 @Override
                                 public void run() {
                                     Toast.makeText(MainActivity.this, "Hủy kết nối Wi-Fi", Toast.LENGTH_SHORT).show();
+                                    Intent intent = new Intent("com.openclaw.countdown.WIFI_FAILED");
+                                    sendBroadcast(intent);
                                     finish();
                                 }
                             });

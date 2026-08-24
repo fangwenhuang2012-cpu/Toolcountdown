@@ -141,19 +141,8 @@ public class VietMapWifiScanner {
                 }
 
                 // Note: MainActivity handles the requestNetwork and bindProcessToNetwork.
-                // It's in the same process, so the binding applies to our FloatingService as well.
-                // We will poll or wait for the system to change network status.
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        String current = getCurrentWifiSSID();
-                        if (current != null && current.equals(ssid)) {
-                            if (listener != null) listener.onConnectedToVietMapCam(ssid);
-                        } else {
-                            if (listener != null) listener.onError("Đang chờ xác nhận từ hộp thoại Wifi...");
-                        }
-                    }
-                }, 5000);
+                // We now wait for MainActivity to broadcast com.openclaw.countdown.WIFI_CONNECTED
+                // when onAvailable is triggered, so we don't poll here anymore.
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 10+)", e);
             }

@@ -41,6 +41,23 @@ public class FloatingService extends Service {
     private String currentAiStatus = "Đang chờ xe dừng hẳn";
     private boolean isRedLightActive = false;
 
+    private android.content.BroadcastReceiver wifiReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, Intent intent) {
+            if ("com.openclaw.countdown.WIFI_CONNECTED".equals(intent.getAction())) {
+                String ssid = intent.getStringExtra("ssid");
+                currentWifiSsid = ssid;
+                pushStatusToUi();
+                if (streamReader != null && !streamReader.isStreaming()) {
+                    streamReader.startStreaming();
+                }
+            } else if ("com.openclaw.countdown.WIFI_FAILED".equals(intent.getAction())) {
+                currentWifiSsid = "Hủy kết nối Wi-Fi";
+                pushStatusToUi();
+            }
+        }
+    };
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -49,6 +66,15 @@ public class FloatingService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        android.content.IntentFilter filter = new android.content.IntentFilter();
+        filter.addAction("com.openclaw.countdown.WIFI_CONNECTED");
+        filter.addAction("com.openclaw.countdown.WIFI_FAILED");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wifiReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(wifiReceiver, filter);
+        }
 
         createNotificationChannel();
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -509,6 +535,9 @@ public class FloatingService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        try {
+            unregisterReceiver(wifiReceiver);
+        } catch (Exception ignored) {}
         if (speedMonitor != null) {
             speedMonitor.stopMonitoring();
         }
