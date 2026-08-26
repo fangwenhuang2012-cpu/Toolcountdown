@@ -193,7 +193,7 @@ public class FloatingService extends Service {
                     wifiScanner.connectToVietMapCam(ssid, savedPass);
                 } else if (!ssid.equals(lastPromptedSsid)) {
                     lastPromptedSsid = ssid;
-                    // Dùng mật khẩu mặc định của đa số Camera hành trình (12345678) vì giao diện chưa có prompt
+                    // Tự động kết nối với mật khẩu mặc định
                     wifiScanner.connectToVietMapCam(ssid, "12345678");
                 }
             }

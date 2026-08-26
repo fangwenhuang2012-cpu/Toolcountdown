@@ -18,8 +18,7 @@ import java.util.List;
 public class VietMapWifiScanner {
     private static final String TAG = "VietMapWifiScanner";
     private static final String[] VIETMAP_KEYWORDS = {
-        "VIETMAP", "VietMap", "vietmap", "KC01", "SPEEDMAP", "TS-2K", "C65", "PAPAGO", 
-        "DVR", "70mai", "NAVIFLEX", "DASHCAM", "CAR", "VNAV", "WiFi"
+        "Vietmap-TS-C1_423ced"
     };
 
     public interface WifiScanListener {
@@ -44,6 +43,16 @@ public class VietMapWifiScanner {
             return;
         }
 
+        // Kiểm tra xem đã kết nối sẵn chưa
+        String currentSsid = getCurrentWifiSSID();
+        if (isVietMapSSID(currentSsid)) {
+            Log.d(TAG, "Đã kết nối sẵn tới: " + currentSsid);
+            if (listener != null) {
+                listener.onConnectedToVietMapCam(currentSsid);
+            }
+            return;
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             try {
                 if (!wifiManager.isWifiEnabled()) {
@@ -58,6 +67,12 @@ public class VietMapWifiScanner {
             @Override
             public void run() {
                 try {
+                    // Double check before scanning
+                    String checkSsid = getCurrentWifiSSID();
+                    if (isVietMapSSID(checkSsid)) {
+                        if (listener != null) listener.onConnectedToVietMapCam(checkSsid);
+                        return;
+                    }
                     List<ScanResult> results = wifiManager.getScanResults();
                     boolean found = false;
                     ScanResult bestMatch = null;
@@ -83,9 +98,8 @@ public class VietMapWifiScanner {
                         handler.postDelayed(this, 5000);
                     } else if (!found) {
                         Log.d(TAG, "Không tìm thấy Wi-Fi Camera VietMap sau nhiều lần quét");
-                        // Tự động báo cho ứng dụng biết để mở giao diện yêu cầu kết nối
                         if (listener != null) {
-                            listener.onVietMapCamFound("Camera VietMap", 0); // Giả lập để hiện popup đòi wifi
+                            listener.onError("Chưa tìm thấy Wi-Fi Camera VietMap");
                         }
                     }
                 } catch (Exception e) {
@@ -109,12 +123,12 @@ public class VietMapWifiScanner {
 
     public void connectToVietMapCam(final String ssid, final String passwordParam) {
         if ("Camera VietMap".equals(ssid) || (ssid != null && ssid.contains("Chưa kết nối"))) {
-            Log.d(TAG, "Không có SSID cụ thể, mở cài đặt Wi-Fi hệ thống...");
+            Log.d(TAG, "Không có SSID cụ thể, yêu cầu người dùng tự mở cài đặt...");
             try {
                 android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
                 intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(intent);
-                if (listener != null) listener.onError("Vui lòng tự chọn Wi-Fi VietMap trong Cài đặt");
+                if (listener != null) listener.onError("Đã mở Cài đặt. Vui lòng tự chọn Wi-Fi Camera VietMap");
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi mở cài đặt Wi-Fi", e);
             }
@@ -127,22 +141,27 @@ public class VietMapWifiScanner {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                // Background services cannot show WifiNetworkSpecifier dialog on Android 10+
-                // We launch MainActivity which is an Activity to request the network
-                android.content.Intent intent = new android.content.Intent(context, MainActivity.class);
-                intent.putExtra("CONNECT_WIFI_SSID", ssid);
-                intent.putExtra("CONNECT_WIFI_PASS", password);
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                context.startActivity(intent);
-                
-                // Keep the UI informed
-                if (listener != null) {
-                    listener.onError("Đã hiện popup Cài đặt Wifi... (Chọn Connect/Kết Nối)");
-                }
+                // Sử dụng WifiNetworkSuggestion để tự động kết nối ngầm mà không hiện popup gây phiền
+                android.net.wifi.WifiNetworkSuggestion suggestion = new android.net.wifi.WifiNetworkSuggestion.Builder()
+                        .setSsid(ssid)
+                        .setWpa2Passphrase(password)
+                        .build();
 
-                // Note: MainActivity handles the requestNetwork and bindProcessToNetwork.
-                // We now wait for MainActivity to broadcast com.openclaw.countdown.WIFI_CONNECTED
-                // when onAvailable is triggered, so we don't poll here anymore.
+                java.util.List<android.net.wifi.WifiNetworkSuggestion> list = new java.util.ArrayList<>();
+                list.add(suggestion);
+
+                int status = wifiManager.addNetworkSuggestions(list);
+                if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
+                    Log.d(TAG, "Đã đẩy cấu hình Wi-Fi tự động cho HĐH: " + ssid);
+                    if (listener != null) {
+                        listener.onError("Đã gửi lệnh kết nối ngầm. Đang chờ HĐH xử lý...");
+                    }
+                } else {
+                    Log.e(TAG, "Lỗi khi dùng WifiNetworkSuggestion: " + status);
+                    if (listener != null) {
+                        listener.onError("Không thể tự kết nối (Lỗi " + status + "). Hãy kết nối tay.");
+                    }
+                }
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 10+)", e);
             }
@@ -187,7 +206,17 @@ public class VietMapWifiScanner {
             if (cm != null) {
                 NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
                 if (activeNetwork != null && activeNetwork.getType() == ConnectivityManager.TYPE_WIFI && activeNetwork.isConnected()) {
-                    return "Wi-Fi Camera VietMap (Đã nối local)";
+                    // fallback text if we can't get SSID due to permissions
+                    return "Đã kết nối Wi-Fi Local (Có thể là Camera)";
+                }
+                
+                // On Android Q+, if they connected to a Wi-Fi without internet, it might not be the "active" network
+                android.net.Network[] allNetworks = cm.getAllNetworks();
+                for (android.net.Network network : allNetworks) {
+                    NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        return "Đã kết nối Wi-Fi Local (Có thể là Camera)";
+                    }
                 }
             }
         } catch (Exception ignored) {}
