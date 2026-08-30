@@ -30,6 +30,7 @@ public class VietMapWifiScanner {
     private final Context context;
     private final WifiManager wifiManager;
     private final WifiScanListener listener;
+    private ConnectivityManager.NetworkCallback networkCallback;
 
     public VietMapWifiScanner(Context context, WifiScanListener listener) {
         this.context = context;
@@ -141,29 +142,65 @@ public class VietMapWifiScanner {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                // Sử dụng WifiNetworkSuggestion để tự động kết nối ngầm mà không hiện popup gây phiền
-                android.net.wifi.WifiNetworkSuggestion suggestion = new android.net.wifi.WifiNetworkSuggestion.Builder()
-                        .setSsid(ssid)
-                        .setWpa2Passphrase(password)
+                WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
+                builder.setSsid(ssid);
+                builder.setWpa2Passphrase(password);
+
+                WifiNetworkSpecifier specifier = builder.build();
+
+                NetworkRequest request = new NetworkRequest.Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .setNetworkSpecifier(specifier)
                         .build();
 
-                java.util.List<android.net.wifi.WifiNetworkSuggestion> list = new java.util.ArrayList<>();
-                list.add(suggestion);
+                final ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                
+                if (networkCallback != null) {
+                    try {
+                        connectivityManager.unregisterNetworkCallback(networkCallback);
+                    } catch (Exception ignored) {}
+                }
 
-                int status = wifiManager.addNetworkSuggestions(list);
-                if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
-                    Log.d(TAG, "Đã đẩy cấu hình Wi-Fi tự động cho HĐH: " + ssid);
-                    if (listener != null) {
-                        listener.onError("Đã gửi lệnh kết nối ngầm. Đang chờ HĐH xử lý...");
+                networkCallback = new ConnectivityManager.NetworkCallback() {
+                    @Override
+                    public void onAvailable(android.net.Network network) {
+                        super.onAvailable(network);
+                        Log.d(TAG, "Đã kết nối thành công qua NetworkSpecifier: " + ssid);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            connectivityManager.bindProcessToNetwork(network);
+                        }
+                        
+                        if (listener != null) {
+                            listener.onConnectedToVietMapCam(ssid);
+                        }
+                        
+                        android.content.Intent intent = new android.content.Intent("com.openclaw.countdown.WIFI_CONNECTED");
+                        intent.putExtra("ssid", ssid);
+                        intent.setPackage(context.getPackageName());
+                        context.sendBroadcast(intent);
                     }
-                } else {
-                    Log.e(TAG, "Lỗi khi dùng WifiNetworkSuggestion: " + status);
-                    if (listener != null) {
-                        listener.onError("Không thể tự kết nối (Lỗi " + status + "). Hãy kết nối tay.");
+
+                    @Override
+                    public void onUnavailable() {
+                        super.onUnavailable();
+                        Log.e(TAG, "Kết nối bị hủy hoặc thất bại qua NetworkSpecifier.");
+                        if (listener != null) {
+                            listener.onError("Lỗi kết nối hoặc đã hủy bỏ.");
+                        }
+                        android.content.Intent intent = new android.content.Intent("com.openclaw.countdown.WIFI_FAILED");
+                        intent.setPackage(context.getPackageName());
+                        context.sendBroadcast(intent);
                     }
+                };
+
+                connectivityManager.requestNetwork(request, networkCallback);
+                if (listener != null) {
+                    listener.onError("Vui lòng xác nhận kết nối trên màn hình...");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 10+)", e);
+                if (listener != null) listener.onError("Lỗi API kết nối: " + e.getMessage());
             }
         } else {
             try {
