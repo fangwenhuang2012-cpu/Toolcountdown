@@ -23,7 +23,9 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class VietMapStreamReader {
     private static final String TAG = "VietMapStreamReader";
@@ -48,9 +50,9 @@ public class VietMapStreamReader {
     private Network cameraWifiNetwork = null;
     private Context context = null;
 
-    private long lastRtspAttemptTime = 0;
     private long lastWakeUpAttemptTime = 0;
-    private String detectedGatewayIp = "192.168.1.254";
+    private String activeCameraIp = "192.168.1.254";
+    private int activeStreamingPort = -1;
 
     public VietMapStreamReader(Context context, String streamUrl, FrameCallback callback, TrafficLightDetector detector) {
         this.context = context;
@@ -92,7 +94,6 @@ public class VietMapStreamReader {
                         }
                     }
 
-                    // Đăng ký Callback lắng nghe mạng Wi-Fi
                     NetworkRequest request = new NetworkRequest.Builder()
                             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                             .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -117,38 +118,69 @@ public class VietMapStreamReader {
         }
     }
 
-    private String getCameraGatewayIp() {
+    private String formatIp(int ipInt) {
+        return (ipInt & 0xFF) + "." + ((ipInt >> 8) & 0xFF) + "." + ((ipInt >> 16) & 0xFF) + "." + ((ipInt >> 24) & 0xFF);
+    }
+
+    private List<String> getCandidateIps() {
+        List<String> ips = new ArrayList<>();
         try {
             if (context != null) {
                 WifiManager wm = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 if (wm != null) {
                     DhcpInfo dhcp = wm.getDhcpInfo();
-                    if (dhcp != null && dhcp.gateway != 0) {
-                        int g = dhcp.gateway;
-                        String ip = (g & 0xFF) + "." + ((g >> 8) & 0xFF) + "." + ((g >> 16) & 0xFF) + "." + ((g >> 24) & 0xFF);
-                        if (!"0.0.0.0".equals(ip)) {
-                            return ip;
+                    if (dhcp != null) {
+                        if (dhcp.serverAddress != 0) {
+                            String sIp = formatIp(dhcp.serverAddress);
+                            if (!"0.0.0.0".equals(sIp) && !ips.contains(sIp)) ips.add(sIp);
+                        }
+                        if (dhcp.gateway != 0) {
+                            String gIp = formatIp(dhcp.gateway);
+                            if (!"0.0.0.0".equals(gIp) && !ips.contains(gIp)) ips.add(gIp);
                         }
                     }
                 }
             }
         } catch (Exception ignored) {}
-        return "192.168.1.254";
+        if (!ips.contains("192.168.1.254")) ips.add("192.168.1.254");
+        if (!ips.contains("192.168.0.1")) ips.add("192.168.0.1");
+        if (!ips.contains("192.168.1.1")) ips.add("192.168.1.1");
+        if (!ips.contains("192.168.42.1")) ips.add("192.168.42.1");
+        if (!ips.contains("192.168.43.1")) ips.add("192.168.43.1");
+        return ips;
     }
 
     /**
-     * Gửi toàn bộ tập lệnh Novatek Handshake để camera bắt đầu phát luồng video
+     * Quét nhanh TCP Socket SYN để kiểm tra cổng nào đang mở trên Camera (<250ms)
      */
+    private boolean isPortOpen(String host, int port, int timeoutMs) {
+        Socket s = null;
+        try {
+            ensureWifiNetworkBound();
+            if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                s = cameraWifiNetwork.getSocketFactory().createSocket();
+            } else {
+                s = new Socket();
+            }
+            s.connect(new InetSocketAddress(host, port), timeoutMs);
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (s != null) {
+                try { s.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
     private void sendNovatekHandshake(String gatewayIp) {
         String[] handshakeUrls = new String[]{
-            "http://" + gatewayIp + "/?custom=1&cmd=3001",         // Heartbeat / Connect
-            "http://" + gatewayIp + "/?custom=1&cmd=1001",         // Query System Info
-            "http://" + gatewayIp + "/?custom=1&cmd=2001&par=1",   // Start Live View / Movie preview
-            "http://" + gatewayIp + "/?custom=1&cmd=2001",         // Start Stream
-            "http://" + gatewayIp + "/?custom=1&cmd=3014",         // Preview Ready Check
-            "http://" + gatewayIp + "/?custom=1&cmd=3016",         // Start Live Stream Broadcast
-            "http://" + gatewayIp + "/?custom=1&cmd=1005",         // Switch Mode
-            "http://" + gatewayIp + "/?custom=1&cmd=2002&par=0"    // Stop SD loop conflict
+            "http://" + gatewayIp + "/?custom=1&cmd=3001",
+            "http://" + gatewayIp + "/?custom=1&cmd=1001",
+            "http://" + gatewayIp + "/?custom=1&cmd=2001&par=1",
+            "http://" + gatewayIp + "/?custom=1&cmd=3014",
+            "http://" + gatewayIp + "/?custom=1&cmd=3016",
+            "http://" + gatewayIp + "/?custom=1&cmd=1005"
         };
 
         for (String urlStr : handshakeUrls) {
@@ -160,13 +192,12 @@ public class VietMapStreamReader {
                 } else {
                     conn = (HttpURLConnection) url.openConnection();
                 }
-                conn.setConnectTimeout(600);
-                conn.setReadTimeout(600);
+                conn.setConnectTimeout(400);
+                conn.setReadTimeout(400);
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("User-Agent", "VietMap/1.0");
                 conn.connect();
-                int respCode = conn.getResponseCode();
-                Log.d(TAG, "Handshake (" + urlStr + ") -> " + respCode);
+                conn.getResponseCode();
                 conn.disconnect();
             } catch (Exception ignored) {}
         }
@@ -177,17 +208,12 @@ public class VietMapStreamReader {
         isStreaming = true;
 
         ensureWifiNetworkBound();
-        detectedGatewayIp = getCameraGatewayIp();
 
         streamThread = new HandlerThread("VietMapStreamWorker");
         streamThread.start();
         streamHandler = new Handler(streamThread.getLooper());
 
-        Log.d(TAG, "Bắt đầu tiến trình streaming camera VietMap (" + detectedGatewayIp + ")...");
-
-        if (statusListener != null) {
-            statusListener.onStatusUpdated("Đang kích hoạt Camera (" + detectedGatewayIp + ")...", false);
-        }
+        Log.d(TAG, "Bắt đầu tiến trình scanning & streaming camera VietMap...");
 
         streamHandler.post(new Runnable() {
             @Override
@@ -195,90 +221,121 @@ public class VietMapStreamReader {
                 if (!isStreaming) return;
 
                 ensureWifiNetworkBound();
-                detectedGatewayIp = getCameraGatewayIp();
+                List<String> candidateIps = getCandidateIps();
+                boolean streamSuccess = false;
 
-                // 1. Kích hoạt camera
-                sendNovatekHandshake(detectedGatewayIp);
+                // Thử từng IP (Server IP, Gateway IP, 192.168.1.254, ...)
+                for (String ip : candidateIps) {
+                    if (!isStreaming) break;
 
-                // 2. Thử mở luồng persistent TCP Socket MJPEG (Port 8192 & 8080)
-                if (statusListener != null) {
-                    statusListener.onStatusUpdated("Đang mở luồng Live (Port 8192)...", false);
-                }
-                boolean streamActive = streamMjpegSocketLoop(detectedGatewayIp, 8192);
-
-                if (!streamActive && isStreaming) {
                     if (statusListener != null) {
-                        statusListener.onStatusUpdated("Đang thử luồng Live (Port 8080)...", false);
-                    }
-                    streamActive = streamMjpegSocketLoop(detectedGatewayIp, 8080);
-                }
-
-                if (!streamActive && isStreaming) {
-                    // 3. Fallback sang HTTP Snapshot CGI polling (?cmd=2017 hoặc snapshot.cgi)
-                    if (statusListener != null) {
-                        statusListener.onStatusUpdated("Đang thử luồng Snapshot (" + detectedGatewayIp + ")...", false);
-                    }
-                    Bitmap snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/?custom=1&cmd=2017");
-                    if (snap == null) {
-                        snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/cgi-bin/snapshot.cgi");
-                    }
-                    if (snap == null) {
-                        snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/snapshot.jpg");
+                        statusListener.onStatusUpdated("Đang quét IP Cam: " + ip + "...", false);
                     }
 
-                    if (snap != null) {
+                    // 1. Quét nhanh xem các cổng nào đang mở trên IP này
+                    boolean port8192Open = isPortOpen(ip, 8192, 250);
+                    boolean port554Open  = isPortOpen(ip, 554, 250);
+                    boolean port80Open   = isPortOpen(ip, 80, 250);
+                    boolean port8080Open = isPortOpen(ip, 8080, 250);
+                    boolean port7060Open = isPortOpen(ip, 7060, 250);
+
+                    Log.d(TAG, "Kết quả quét IP " + ip + " -> 8192:" + port8192Open + ", 554:" + port554Open + ", 80:" + port80Open + ", 8080:" + port8080Open + ", 7060:" + port7060Open);
+
+                    // Nếu cổng 80 mở -> Gửi lệnh khởi tạo
+                    if (port80Open) {
+                        sendNovatekHandshake(ip);
+                    }
+
+                    // ƯU TIÊN 1: Cổng 8192 (Novatek Live MJPEG)
+                    if (port8192Open) {
+                        activeCameraIp = ip;
+                        activeStreamingPort = 8192;
                         if (statusListener != null) {
-                            statusListener.onStatusUpdated("Đã nhận luồng Camera (Snapshot CGI)", true);
+                            statusListener.onStatusUpdated("Mở luồng Live (Port 8192)...", false);
                         }
-                        if (callback != null) callback.onFrameCaptured(snap);
-                        if (detector != null) detector.processFrame(snap);
-                        snap.recycle();
-                        streamActive = true;
-                    } else {
-                        // 4. Fallback sang RTSP
-                        long now = System.currentTimeMillis();
-                        if (now - lastRtspAttemptTime > 3000) {
-                            lastRtspAttemptTime = now;
-                            if (statusListener != null) {
-                                statusListener.onStatusUpdated("Đang dò tìm luồng RTSP...", false);
-                            }
-                            Bitmap rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/pjfirst");
-                            if (rtspBmp == null) {
-                                rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/sjcam.mov");
-                            }
-                            if (rtspBmp == null) {
-                                rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/live");
-                            }
-                            if (rtspBmp != null) {
+                        streamSuccess = streamMjpegSocketLoop(ip, 8192);
+                        if (streamSuccess) break;
+                    }
+
+                    // ƯU TIÊN 2: Cổng 554 (RTSP Stream)
+                    if (port554Open && isStreaming) {
+                        activeCameraIp = ip;
+                        activeStreamingPort = 554;
+                        if (statusListener != null) {
+                            statusListener.onStatusUpdated("Mở luồng RTSP (Port 554)...", false);
+                        }
+                        String[] rtspPaths = new String[]{
+                            "rtsp://" + ip + "/pjfirst",
+                            "rtsp://" + ip + "/sjcam.mov",
+                            "rtsp://" + ip + "/live",
+                            "rtsp://" + ip + ":554/liveRTSP/av4",
+                            "rtsp://" + ip + ":554/liveRTSP/v1",
+                            "rtsp://" + ip + ":554/ch0"
+                        };
+                        for (String path : rtspPaths) {
+                            Bitmap b = fetchRtspFrameSafe(path);
+                            if (b != null) {
                                 if (statusListener != null) {
                                     statusListener.onStatusUpdated("Đã nhận luồng Camera (RTSP)", true);
                                 }
-                                if (callback != null) callback.onFrameCaptured(rtspBmp);
-                                if (detector != null) detector.processFrame(rtspBmp);
-                                rtspBmp.recycle();
-                                streamActive = true;
+                                if (callback != null) callback.onFrameCaptured(b);
+                                if (detector != null) detector.processFrame(b);
+                                b.recycle();
+                                streamSuccess = true;
+                                break;
                             }
+                        }
+                        if (streamSuccess) break;
+                    }
+
+                    // ƯU TIÊN 3: Cổng 8080 / 7060 (MJPEG Stream)
+                    if ((port8080Open || port7060Open) && isStreaming) {
+                        int p = port8080Open ? 8080 : 7060;
+                        activeCameraIp = ip;
+                        activeStreamingPort = p;
+                        if (statusListener != null) {
+                            statusListener.onStatusUpdated("Mở luồng Live (Port " + p + ")...", false);
+                        }
+                        streamSuccess = streamMjpegSocketLoop(ip, p);
+                        if (streamSuccess) break;
+                    }
+
+                    // ƯU TIÊN 4: Cổng 80 (HTTP Snapshot CGI)
+                    if (port80Open && isStreaming) {
+                        activeCameraIp = ip;
+                        activeStreamingPort = 80;
+                        if (statusListener != null) {
+                            statusListener.onStatusUpdated("Thử lấy luồng Snapshot (Port 80)...", false);
+                        }
+                        Bitmap snap = fetchHttpSnapshotFrame("http://" + ip + "/?custom=1&cmd=2017");
+                        if (snap == null) snap = fetchHttpSnapshotFrame("http://" + ip + "/cgi-bin/snapshot.cgi");
+                        if (snap == null) snap = fetchHttpSnapshotFrame("http://" + ip + "/snapshot.jpg");
+                        if (snap != null) {
+                            if (statusListener != null) {
+                                statusListener.onStatusUpdated("Đã nhận luồng Camera (Snapshot CGI)", true);
+                            }
+                            if (callback != null) callback.onFrameCaptured(snap);
+                            if (detector != null) detector.processFrame(snap);
+                            snap.recycle();
+                            streamSuccess = true;
+                            break;
                         }
                     }
                 }
 
-                if (!streamActive && isStreaming) {
+                if (!streamSuccess && isStreaming) {
                     if (statusListener != null) {
-                        statusListener.onStatusUpdated("Đang kết nối lại Camera (" + detectedGatewayIp + ")...", false);
+                        statusListener.onStatusUpdated("Đang kết nối lại Cam (" + activeCameraIp + ")...", false);
                     }
                 }
 
                 if (isStreaming && streamHandler != null) {
-                    streamHandler.postDelayed(this, streamActive ? 150 : 800);
+                    streamHandler.postDelayed(this, streamSuccess ? 120 : 1200);
                 }
             }
         });
     }
 
-    /**
-     * Bộ giải mã MJPEG thời gian thực qua Persistent TCP Socket:
-     * Giữ nguyên 1 kết nối duy nhất, liên tục nhận và bóc tách từng khung hình JPEG (0xFF 0xD8 -> 0xFF 0xD9)
-     */
     private boolean streamMjpegSocketLoop(String host, int port) {
         Socket socket = null;
         InputStream in = null;
@@ -324,7 +381,7 @@ public class VietMapStreamReader {
                             byte[] jpegBytes = frameBuffer.toByteArray();
                             if (jpegBytes.length > 2048) {
                                 BitmapFactory.Options opts = new BitmapFactory.Options();
-                                opts.inSampleSize = 2; // Tăng tốc độ giải mã AI
+                                opts.inSampleSize = 2;
                                 Bitmap bmp = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length, opts);
                                 if (bmp != null) {
                                     frameCount++;
@@ -347,15 +404,13 @@ public class VietMapStreamReader {
                     lastByte = currentByte;
                 }
 
-                // Gửi Heartbeat duy trì phiên mỗi 5 giây
                 if (System.currentTimeMillis() - lastWakeUpAttemptTime > 5000) {
                     lastWakeUpAttemptTime = System.currentTimeMillis();
                     sendNovatekHandshake(host);
                 }
 
-                // Nếu quá 3.5s không nhận được khung hình -> socket bị nghẽn, ngắt để tái kết nối
                 if (System.currentTimeMillis() - lastFrameTime > 3500) {
-                    Log.w(TAG, "Socket port " + port + " timeout không có frame mới -> Reconnect");
+                    Log.w(TAG, "Socket port " + port + " timeout -> reconnect");
                     break;
                 }
             }
@@ -384,8 +439,8 @@ public class VietMapStreamReader {
             } else {
                 connection = (HttpURLConnection) url.openConnection();
             }
-            connection.setConnectTimeout(1000);
-            connection.setReadTimeout(1200);
+            connection.setConnectTimeout(800);
+            connection.setReadTimeout(1000);
             connection.setUseCaches(false);
             connection.setDoInput(true);
             connection.setRequestProperty("User-Agent", "VietMap/1.0");
