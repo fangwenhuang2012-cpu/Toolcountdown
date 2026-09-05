@@ -3,6 +3,7 @@
 build/
 app/build/
 *.apk
+!Tool_AndroidBox_AI_VietMap_Camera_HUD.apk
 *.aar
 
 # Python
