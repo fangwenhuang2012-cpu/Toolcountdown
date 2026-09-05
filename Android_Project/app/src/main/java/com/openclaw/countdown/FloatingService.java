@@ -37,8 +37,8 @@ public class FloatingService extends Service {
 
     private String currentWifiSsid = "Đang dò Wi-Fi VietMap...";
     private String currentStreamStatus = "Chưa kết nối luồng Camera";
-    private String currentGpsSpeed = "0 km/h (Sẵn sàng)";
-    private String currentAiStatus = "Đang chờ xe dừng hẳn";
+    private String currentGpsSpeed = "0 km/h (Đã dừng)";
+    private String currentAiStatus = "Xe đã dừng - AI đang quét đèn đỏ";
     private boolean isRedLightActive = false;
 
     private android.content.BroadcastReceiver wifiReceiver = new android.content.BroadcastReceiver() {
@@ -128,8 +128,8 @@ public class FloatingService extends Service {
         int screenW = metrics.widthPixels;
         int screenH = metrics.heightPixels;
 
-        int defaultWidth = Math.min(Math.round(350 * density), screenW);
-        int defaultHeight = Math.min(Math.round(405 * density), screenH);
+        int defaultWidth = Math.min(Math.round(620 * density), screenW);
+        int defaultHeight = Math.min(Math.round(370 * density), screenH);
         int defaultX = Math.round(15 * density);
         int defaultY = Math.round(15 * density);
 
@@ -279,7 +279,7 @@ public class FloatingService extends Service {
                 if (isRedLightActive) {
                     currentAiStatus = "Xe dừng - Tiếp tục đếm ngược";
                 } else {
-                    currentAiStatus = "Xe dừng - AI đang soi camera";
+                    currentAiStatus = "Xe đã dừng - AI đang quét đèn đỏ";
                 }
                 pushStatusToUi();
                 if (streamReader != null && !streamReader.isStreaming()) {
@@ -310,8 +310,8 @@ public class FloatingService extends Service {
                         pushStatusToUi();
                         return;
                     } else {
-                        currentGpsSpeed = String.format("%.0f km/h (Vượt 10km/h - Ẩn HUD)", speedKmh);
-                        currentAiStatus = "Đang đếm ngầm (Background)";
+                        currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
+                        currentAiStatus = "Xe đang chạy - Đang đếm ngầm";
                         pushStatusToUi();
                         mainHandler.post(new Runnable() {
                             @Override
@@ -333,7 +333,7 @@ public class FloatingService extends Service {
                 isRedLightActive = false;
                 
                 currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
-                currentAiStatus = "Xe di chuyển - Thu nhỏ HUD";
+                currentAiStatus = "Xe đang chạy - Tạm ẩn đếm ngược";
                 pushStatusToUi();
                 if (detector != null) {
                     detector.reset();

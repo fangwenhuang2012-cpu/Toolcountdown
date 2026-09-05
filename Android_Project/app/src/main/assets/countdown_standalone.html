@@ -54,28 +54,20 @@ html, body {
 
 .floating-widget {
     position: fixed;
-    top: 20px;
-    left: 20px;
-    width: 300px;
-    height: 340px;
-    background: var(--hud-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 2px solid var(--hud-border-blue);
-    border-radius: 24px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-blue);
-    z-index: 9999;
+    top: 15px;
+    left: 15px;
     display: flex;
-    flex-direction: column;
-    overflow: visible !important;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 12px;
+    z-index: 9999;
     pointer-events: auto !important;
-    transition: transform 0.2s ease, opacity 0.25s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.2s ease, opacity 0.25s ease;
 }
 
 .floating-widget.is-dragging,
 .floating-widget.is-resizing {
     transition: none !important;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.95), 0 0 45px var(--hud-glow-blue);
     cursor: grabbing;
 }
 
@@ -84,6 +76,22 @@ html, body {
     pointer-events: none !important;
     visibility: hidden;
     display: none !important;
+}
+
+.hud-main-panel {
+    width: 290px;
+    height: 335px;
+    background: var(--hud-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 2px solid var(--hud-border-blue);
+    border-radius: 24px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-blue);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .widget-header {
@@ -265,7 +273,7 @@ html, body {
     color: var(--text-primary);
 }
 
-.floating-widget.theme-blue {
+.floating-widget.theme-blue .hud-main-panel {
     border-color: var(--hud-border-blue);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-blue);
 }
@@ -278,7 +286,7 @@ html, body {
     filter: drop-shadow(0 0 10px var(--blue-accent));
 }
 
-.floating-widget.theme-yellow {
+.floating-widget.theme-yellow .hud-main-panel {
     border-color: var(--hud-border-yellow);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-yellow);
 }
@@ -291,7 +299,7 @@ html, body {
     filter: drop-shadow(0 0 10px var(--yellow-accent));
 }
 
-.floating-widget.theme-red {
+.floating-widget.theme-red .hud-main-panel {
     border-color: var(--hud-border-red);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-red);
 }
@@ -304,7 +312,7 @@ html, body {
     filter: drop-shadow(0 0 10px var(--red-accent));
 }
 
-.floating-widget.theme-green {
+.floating-widget.theme-green .hud-main-panel {
     border-color: var(--hud-border-green);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--hud-glow-green);
 }
@@ -319,10 +327,10 @@ html, body {
 
 .resize-handle {
     position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 24px;
-    height: 24px;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
     cursor: se-resize;
     display: flex;
     align-items: center;
@@ -333,7 +341,8 @@ html, body {
 
 .resize-handle:hover {
     color: var(--blue-accent);
-}/* BẢN THU GỌN BÁO CÁO TRẠNG THÁI (GẮN LIỀN GIAO DIỆN CHÍNH HUD) */
+}
+
 .ai-live-badge-btn {
     display: inline-flex;
     align-items: center;
@@ -359,26 +368,20 @@ html, body {
 }
 
 .status-expanded-card {
-    position: absolute;
-    top: 50px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: calc(100% - 50px);
-    background: rgba(10, 14, 23, 0.96);
+    width: 290px;
+    height: 335px;
+    background: var(--hud-bg);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0 0 24px 24px;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    border-radius: 24px;
     padding: 12px 14px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     gap: 8px;
-    z-index: 100;
-    overflow-y: auto;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -392,7 +395,7 @@ html, body {
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     padding-bottom: 6px;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .card-title {
@@ -462,42 +465,63 @@ html, body {
     </style>
 </head>
 <body>
-    <!-- AI VIETMAP HUD FLOATING OVERLAY (TẤT CẢ TÍNH NĂNG NẰM TRONG GIAO DIỆN CHÍNH NÀY) -->
     <div class="floating-widget theme-blue" id="floatingWidget">
-        <div class="widget-header" id="widgetHeader">
-            <div class="drag-handle" title="Chạm giữ để di chuyển HUD trên màn hình ô tô">
-                <button class="ai-live-badge-btn" onclick="toggleStatusPanel(event)" title="Bấm để mở Báo cáo Realtime">
-                    <span class="pulse-dot" id="camStatusDot"></span>
-                    <span class="badge-text" id="camStatusText">CAM VIETMAP AI</span>
-                    <span class="badge-arrow">▶</span>
-                </button>
+        
+        <div class="hud-main-panel" id="hudMainPanel">
+            <div class="widget-header" id="widgetHeader">
+                <div class="drag-handle" title="Chạm giữ để di chuyển HUD trên màn hình ô tô">
+                    <button class="ai-live-badge-btn" onclick="toggleStatusPanel(event)" title="Ẩn/Hiện Báo cáo bên phải">
+                        <span class="pulse-dot" id="camStatusDot"></span>
+                        <span class="badge-text" id="camStatusText">CAM VIETMAP AI</span>
+                        <span class="badge-arrow">▶</span>
+                    </button>
+                </div>
+                <div class="widget-controls">
+                    <button class="icon-btn" id="infoBtn" onclick="toggleStatusPanel(event)" title="Ẩn/Hiện Báo cáo bên phải">📊</button>
+                    <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)" title="Bật/Tắt Âm Thanh">🔊</button>
+                    <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Tool">✖</button>
+                </div>
             </div>
-            <div class="widget-controls">
-                <button class="icon-btn" id="infoBtn" onclick="toggleStatusPanel(event)" title="Xem Báo cáo Trạng thái">📊</button>
-                <button class="icon-btn" id="audioBtn" onclick="handleToggleAudio(event)" title="Bật/Tắt Âm Thanh">🔊</button>
-                <button class="icon-btn btn-close" onclick="handleCloseApp(event)" title="Đóng Tool">✖</button>
+
+            <div class="hud-body">
+                <div class="hud-circle-container">
+                    <svg class="progress-ring" width="180" height="180" viewBox="0 0 180 180">
+                        <circle class="progress-ring-track" cx="90" cy="90" r="76"></circle>
+                        <circle class="progress-ring-fill" id="progressFill" cx="90" cy="90" r="76"></circle>
+                    </svg>
+                    <div class="hud-center-content">
+                        <div class="hud-digits" id="digitalDisplay">
+                            <span class="digit" id="digit1">0</span>
+                            <span class="digit" id="digit2">0</span>
+                        </div>
+                        <div class="hud-unit">GIÂY DỪNG ĐÈN ĐỎ</div>
+                    </div>
+                </div>
+
+                <div class="hud-status-badge" id="statusBadge">
+                    <span class="status-icon" id="statusIcon">🛑</span>
+                    <span class="status-text" id="statusText">ĐÈN ĐỎ AI - ĐANG ĐẾM</span>
+                </div>
             </div>
         </div>
 
-        <!-- BÁO CÁO TRẠNG THÁI REALTIME NẰM BÊN PHẢI KHUNG CHÍNH HUD (SIDE-BY-SIDE) -->
-        <div class="status-expanded-card hidden" id="statusExpandedCard">
+        <div class="status-expanded-card" id="statusExpandedCard">
             <div class="card-header">
                 <span class="card-title">📊 BÁO CÁO KẾT NỐI REALTIME</span>
-                <button class="card-close-btn" onclick="toggleStatusPanel(event)">✖</button>
+                <button class="card-close-btn" onclick="toggleStatusPanel(event)" title="Ẩn bảng báo cáo">✖</button>
             </div>
             <div class="card-body">
-                <div class="status-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <div style="display: flex; justify-content: space-between;">
+                <div class="status-item" style="flex-direction: column; align-items: stretch; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span class="item-label">📶 Wi-Fi Kết Nối:</span>
                         <span class="item-val val-wifi" id="valWifi">Đang dò Wi-Fi...</span>
                     </div>
-                    <div id="wifiPassContainer" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <span class="item-label" style="font-size: 0.85em; color: #ffeb3b;">Nhập mật khẩu (nếu khác 12345678):</span>
+                    <div id="wifiPassContainer" style="display: none; flex-direction: column; gap: 6px; margin-top: 2px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.06);">
+                        <span class="item-label" style="font-size: 0.72rem; color: #ffcc00;">Mật khẩu (nếu khác 12345678):</span>
                         <div style="display: flex; gap: 6px;">
-                            <input type="text" id="wifiPassInput" placeholder="12345678" style="flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #444; background: rgba(0,0,0,0.5); color: #fff; font-size: 14px; min-width: 0;" />
-                            <button onclick="submitWifiPass()" style="padding: 6px 12px; border-radius: 4px; background: #2196F3; color: #fff; border: none; font-weight: bold; cursor: pointer; white-space: nowrap;">Kết Nối</button>
+                            <input type="text" id="wifiPassInput" placeholder="12345678" style="flex: 1; padding: 4px 6px; border-radius: 4px; border: 1px solid #444; background: rgba(0,0,0,0.5); color: #fff; font-size: 12px; min-width: 0;" />
+                            <button onclick="submitWifiPass()" style="padding: 4px 10px; border-radius: 4px; background: #2196F3; color: #fff; border: none; font-weight: bold; font-size: 11px; cursor: pointer;">Lưu</button>
                         </div>
-                        <button onclick="openWifiSettings()" style="padding: 6px 12px; border-radius: 4px; background: #555; color: #fff; border: none; font-size: 0.85em; cursor: pointer; margin-top: 4px;">Mở Cài Đặt Wi-Fi Máy</button>
                     </div>
                 </div>
                 <div class="status-item">
@@ -506,39 +530,15 @@ html, body {
                 </div>
                 <div class="status-item">
                     <span class="item-label">🚗 Vận Tốc GPS:</span>
-                    <span class="item-val val-gps" id="valGps">0 km/h (Sẵn sàng)</span>
+                    <span class="item-val val-gps" id="valGps">0 km/h (Đã dừng)</span>
                 </div>
                 <div class="status-item">
                     <span class="item-label">🤖 Trạng Thái AI:</span>
-                    <span class="item-val val-ai" id="valAi">Đang chờ xe dừng đèn đỏ</span>
+                    <span class="item-val val-ai" id="valAi">Xe đã dừng - AI đang quét đèn đỏ</span>
                 </div>
             </div>
-            <div class="card-footer" style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button onclick="toggleStatusPanel(event)" style="width: 100%; padding: 8px; border-radius: 12px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #ffffff; font-weight: 700; font-size: 0.78rem; cursor: pointer;">◀ QUAY LẠI ĐỒNG HỒ</button>
-                <div class="card-footer-tip" style="padding-top: 2px; border-top: none;">
-                    💡 Chạm "KẾT NỐI" trên thông báo Android để hoàn tất kết nối Camera
-                </div>
-            </div>
-        </div>
-
-        <div class="hud-body">
-            <div class="hud-circle-container">
-                <svg class="progress-ring" width="180" height="180" viewBox="0 0 180 180">
-                    <circle class="progress-ring-track" cx="90" cy="90" r="76"></circle>
-                    <circle class="progress-ring-fill" id="progressFill" cx="90" cy="90" r="76"></circle>
-                </svg>
-                <div class="hud-center-content">
-                    <div class="hud-digits" id="digitalDisplay">
-                        <span class="digit" id="digit1">0</span>
-                        <span class="digit" id="digit2">0</span>
-                    </div>
-                    <div class="hud-unit">GIÂY DỪNG ĐÈN ĐỎ</div>
-                </div>
-            </div>
-
-            <div class="hud-status-badge" id="statusBadge">
-                <span class="status-icon" id="statusIcon">🛑</span>
-                <span class="status-text" id="statusText">ĐÈN ĐỎ AI - ĐANG ĐẾM</span>
+            <div class="card-footer-tip">
+                💡 Tự động bật đếm ngược khi phát hiện đèn đỏ
             </div>
         </div>
 
@@ -837,6 +837,12 @@ function toggleStatusPanel(e) {
     const card = document.getElementById('statusExpandedCard');
     if (card) {
         card.classList.toggle('hidden');
+        const isOpen = !card.classList.contains('hidden');
+        if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+            const targetW = isOpen ? 610 : 305;
+            const targetH = 355;
+            window.AndroidBridge.updateWindowBounds(15, 15, targetW, targetH);
+        }
     }
 }
 
