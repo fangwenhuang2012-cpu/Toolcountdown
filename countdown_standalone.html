@@ -360,22 +360,25 @@ html, body {
 
 .status-expanded-card {
     position: absolute;
-    top: 0;
-    left: calc(100% + 12px);
-    width: 280px;
-    height: 100%;
-    background: var(--hud-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    border-radius: 24px;
-    padding: 16px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+    top: 50px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: calc(100% - 50px);
+    background: rgba(10, 14, 23, 0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0 0 24px 24px;
+    padding: 12px 14px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 10px;
-    z-index: 10000;
+    gap: 8px;
+    z-index: 100;
+    overflow-y: auto;
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -387,40 +390,49 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .card-title {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 800;
     color: var(--blue-accent);
     letter-spacing: 0.5px;
 }
 
 .card-close-btn {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.1);
     border: none;
-    color: var(--text-muted);
+    color: var(--text-primary);
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
     font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
 }
 
 .card-close-btn:hover {
-    color: var(--red-accent);
+    background: rgba(255, 45, 85, 0.5);
 }
 
 .card-body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
 }
 
 .status-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.75rem;
+    font-size: 0.76rem;
+    padding: 2px 0;
 }
 
 .item-label {
@@ -431,6 +443,7 @@ html, body {
 .item-val {
     font-weight: 700;
     color: #ffffff;
+    text-align: right;
 }
 
 .val-wifi { color: #0a84ff; }
@@ -443,18 +456,8 @@ html, body {
     color: var(--text-muted);
     text-align: center;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding-top: 8px;
+    padding-top: 6px;
     font-weight: 600;
-}
-
-@media (max-width: 650px) {
-    .status-expanded-card {
-        position: absolute;
-        top: calc(100% + 10px);
-        left: 0;
-        width: 100%;
-        height: auto;
-    }
 }
     </style>
 </head>
@@ -502,7 +505,7 @@ html, body {
                     <span class="item-val val-stream" id="valStream">Chưa kết nối Camera</span>
                 </div>
                 <div class="status-item">
-                    <span class="item-label">🚗 Tốc Độ GPS Xe:</span>
+                    <span class="item-label">🚗 Vận Tốc GPS:</span>
                     <span class="item-val val-gps" id="valGps">0 km/h (Sẵn sàng)</span>
                 </div>
                 <div class="status-item">
@@ -510,8 +513,11 @@ html, body {
                     <span class="item-val val-ai" id="valAi">Đang chờ xe dừng đèn đỏ</span>
                 </div>
             </div>
-            <div class="card-footer-tip">
-                💡 Tự động ẩn khi xe di chuyển hoặc hết đèn đỏ
+            <div class="card-footer" style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
+                <button onclick="toggleStatusPanel(event)" style="width: 100%; padding: 8px; border-radius: 12px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #ffffff; font-weight: 700; font-size: 0.78rem; cursor: pointer;">◀ QUAY LẠI ĐỒNG HỒ</button>
+                <div class="card-footer-tip" style="padding-top: 2px; border-top: none;">
+                    💡 Chạm "KẾT NỐI" trên thông báo Android để hoàn tất kết nối Camera
+                </div>
             </div>
         </div>
 
@@ -873,6 +879,24 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
     if (valStream && streamStatus) valStream.textContent = streamStatus;
     if (valGps && gpsSpeed !== undefined) valGps.textContent = gpsSpeed;
     if (valAi && aiStatus) valAi.textContent = aiStatus;
+
+    const camStatusDot = document.getElementById('camStatusDot');
+    const camStatusText = document.getElementById('camStatusText');
+    if (camStatusText) {
+        if (wifiSsid && (wifiSsid.toLowerCase().includes('vietmap') || wifiSsid.toLowerCase().includes('ts-c1') || wifiSsid.toLowerCase().includes('kc01') || wifiSsid.toLowerCase().includes('papago'))) {
+            camStatusText.textContent = "VIETMAP: KẾT NỐI OK";
+            if (camStatusDot) {
+                camStatusDot.style.background = '#30d158';
+                camStatusDot.style.boxShadow = '0 0 10px #30d158';
+            }
+        } else {
+            camStatusText.textContent = "CAM VIETMAP AI";
+            if (camStatusDot) {
+                camStatusDot.style.background = 'var(--blue-accent)';
+                camStatusDot.style.boxShadow = '0 0 8px var(--blue-accent)';
+            }
+        }
+    }
 
     if (chipText) {
         if (wifiSsid && (wifiSsid.toLowerCase().includes('vietmap') || wifiSsid.toLowerCase().includes('kc01') || wifiSsid.toLowerCase().includes('papago'))) {
