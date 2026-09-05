@@ -15,9 +15,13 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.util.HashMap;
 
@@ -44,8 +48,6 @@ public class VietMapStreamReader {
     private Network cameraWifiNetwork = null;
     private Context context = null;
 
-    private int activeSnapshotEndpointIndex = 0;
-    private int consecutiveFailures = 0;
     private long lastRtspAttemptTime = 0;
     private long lastWakeUpAttemptTime = 0;
     private String detectedGatewayIp = "192.168.1.254";
@@ -56,13 +58,63 @@ public class VietMapStreamReader {
         this.callback = callback;
         this.detector = detector;
 
-        if (context != null) {
-            bindCameraNetworkWithoutDisablingMobileData(context);
-        }
+        ensureWifiNetworkBound();
     }
 
     public void setStatusListener(StreamStatusListener listener) {
         this.statusListener = listener;
+    }
+
+    /**
+     * Chủ động quét và bind Process vào Interface mạng Wi-Fi của Camera
+     * Đảm bảo Android Box không đẩy request nội bộ 192.168.1.254 ra mạng 4G/SIM.
+     */
+    public void ensureWifiNetworkBound() {
+        if (context == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cm != null) {
+                    Network[] networks = cm.getAllNetworks();
+                    if (networks != null) {
+                        for (Network net : networks) {
+                            NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+                            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                                cameraWifiNetwork = net;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    cm.bindProcessToNetwork(net);
+                                } else {
+                                    ConnectivityManager.setProcessDefaultNetwork(net);
+                                }
+                                Log.d(TAG, "Đã gán thành công Wi-Fi Network cho Process: " + net);
+                                return;
+                            }
+                        }
+                    }
+
+                    // Đăng ký Callback lắng nghe mạng Wi-Fi
+                    NetworkRequest request = new NetworkRequest.Builder()
+                            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                            .build();
+                    cm.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
+                        @Override
+                        public void onAvailable(Network network) {
+                            cameraWifiNetwork = network;
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    cm.bindProcessToNetwork(network);
+                                } else {
+                                    ConnectivityManager.setProcessDefaultNetwork(network);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Lỗi khi bind mạng Wi-Fi", e);
+        }
     }
 
     private String getCameraGatewayIp() {
@@ -70,7 +122,7 @@ public class VietMapStreamReader {
             if (context != null) {
                 WifiManager wm = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 if (wm != null) {
-                    android.net.DhcpInfo dhcp = wm.getDhcpInfo();
+                    DhcpInfo dhcp = wm.getDhcpInfo();
                     if (dhcp != null && dhcp.gateway != 0) {
                         int g = dhcp.gateway;
                         String ip = (g & 0xFF) + "." + ((g >> 8) & 0xFF) + "." + ((g >> 16) & 0xFF) + "." + ((g >> 24) & 0xFF);
@@ -84,128 +136,57 @@ public class VietMapStreamReader {
         return "192.168.1.254";
     }
 
-    private String[] getCandidateHttpEndpoints(String gatewayIp) {
-        return new String[]{
-            "http://" + gatewayIp + ":8192",                 // Novatek Viewfinder / Live MJPEG stream (Port 8192)
-            "http://" + gatewayIp + "/?custom=1&cmd=2017",  // Vietmap / Novatek Live Frame CGI
-            "http://" + gatewayIp + ":8080/?action=stream", // MJPEG Stream port 8080
-            "http://" + gatewayIp + ":8080/videofeed",
-            "http://" + gatewayIp + "/cgi-bin/snapshot.cgi",
-            "http://" + gatewayIp + "/snapshot.jpg",
-            "http://" + gatewayIp + "/live.jpg",
-            "http://" + gatewayIp + "/jpg/image.jpg",
-            "http://192.168.1.254:8192",
-            "http://192.168.1.254/?custom=1&cmd=2017",
-            "http://192.168.1.254/cgi-bin/snapshot.cgi",
-            "http://192.168.42.1:8192",
-            "http://192.168.42.1/cgi-bin/snapshot.cgi"
-        };
-    }
-
-    private String[] getCandidateRtspUrls(String gatewayIp) {
-        return new String[]{
-            "rtsp://" + gatewayIp + "/pjfirst",
-            "rtsp://" + gatewayIp + "/sjcam.mov",
-            "rtsp://" + gatewayIp + ":554/liveRTSP/av4",
-            "rtsp://" + gatewayIp + ":554/liveRTSP/v1",
-            "rtsp://" + gatewayIp + "/live",
-            "rtsp://" + gatewayIp + ":554/ch0",
-            "rtsp://" + gatewayIp + ":8554/live",
-            "rtsp://192.168.1.254/pjfirst"
-        };
-    }
-
     /**
-     * Gửi lệnh kích hoạt (Wake-up / Start Live View Mode) cho camera VietMap / Novatek chipset
+     * Gửi toàn bộ tập lệnh Novatek Handshake để camera bắt đầu phát luồng video
      */
-    private void sendNovatekWakeupCommand(String gatewayIp) {
-        try {
-            String[] wakeUrls = new String[]{
-                "http://" + gatewayIp + "/?custom=1&cmd=2001&par=1",
-                "http://" + gatewayIp + "/?custom=1&cmd=2001",
-                "http://" + gatewayIp + "/?custom=1&cmd=3014"
-            };
+    private void sendNovatekHandshake(String gatewayIp) {
+        String[] handshakeUrls = new String[]{
+            "http://" + gatewayIp + "/?custom=1&cmd=3001",         // Heartbeat / Connect
+            "http://" + gatewayIp + "/?custom=1&cmd=1001",         // Query System Info
+            "http://" + gatewayIp + "/?custom=1&cmd=2001&par=1",   // Start Live View / Movie preview
+            "http://" + gatewayIp + "/?custom=1&cmd=2001",         // Start Stream
+            "http://" + gatewayIp + "/?custom=1&cmd=3014",         // Preview Ready Check
+            "http://" + gatewayIp + "/?custom=1&cmd=3016",         // Start Live Stream Broadcast
+            "http://" + gatewayIp + "/?custom=1&cmd=1005",         // Switch Mode
+            "http://" + gatewayIp + "/?custom=1&cmd=2002&par=0"    // Stop SD loop conflict
+        };
 
-            for (String wakeUrl : wakeUrls) {
-                try {
-                    URL url = new URL(wakeUrl);
-                    HttpURLConnection conn = null;
-                    if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        conn = (HttpURLConnection) cameraWifiNetwork.openConnection(url);
-                    } else {
-                        conn = (HttpURLConnection) url.openConnection();
-                    }
-                    conn.setConnectTimeout(800);
-                    conn.setReadTimeout(800);
-                    conn.setRequestMethod("GET");
-                    conn.connect();
-                    int code = conn.getResponseCode();
-                    Log.d(TAG, "Novatek wake-up (" + wakeUrl + ") resp: " + code);
-                    conn.disconnect();
-                } catch (Exception ignored) {}
-            }
-        } catch (Exception ignored) {}
-    }
-
-    /**
-     * Dual Network Routing:
-     * Định tuyến Process Network sang Wi-Fi Camera VietMap,
-     * đồng thời giữ nguyên kết nối 4G LTE/SIM cho Android Box.
-     */
-    public void bindCameraNetworkWithoutDisablingMobileData(final Context ctx) {
-        if (ctx == null) return;
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                final ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
-                if (cm != null) {
-                    NetworkRequest request = new NetworkRequest.Builder()
-                            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                            .build();
-
-                    cm.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
-                        @Override
-                        public void onAvailable(Network network) {
-                            cameraWifiNetwork = network;
-                            Log.d(TAG, "Wi-Fi VietMap Local Network bound for process.");
-                            try {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    cm.bindProcessToNetwork(network);
-                                } else {
-                                    ConnectivityManager.setProcessDefaultNetwork(network);
-                                }
-                            } catch (Exception e) {
-                                Log.e(TAG, "Lỗi bindProcessToNetwork", e);
-                            }
-                        }
-                    });
+        for (String urlStr : handshakeUrls) {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = null;
+                if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    conn = (HttpURLConnection) cameraWifiNetwork.openConnection(url);
+                } else {
+                    conn = (HttpURLConnection) url.openConnection();
                 }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Lỗi bind mạng cục bộ camera", e);
+                conn.setConnectTimeout(600);
+                conn.setReadTimeout(600);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "VietMap/1.0");
+                conn.connect();
+                int respCode = conn.getResponseCode();
+                Log.d(TAG, "Handshake (" + urlStr + ") -> " + respCode);
+                conn.disconnect();
+            } catch (Exception ignored) {}
         }
     }
 
     public void startStreaming() {
         if (isStreaming) return;
         isStreaming = true;
-        consecutiveFailures = 0;
 
+        ensureWifiNetworkBound();
         detectedGatewayIp = getCameraGatewayIp();
-        Log.d(TAG, "Gateway IP nhận diện: " + detectedGatewayIp);
 
-        if (context != null && cameraWifiNetwork == null) {
-            bindCameraNetworkWithoutDisablingMobileData(context);
-        }
-
-        streamThread = new HandlerThread("VietMapStreamThread");
+        streamThread = new HandlerThread("VietMapStreamWorker");
         streamThread.start();
         streamHandler = new Handler(streamThread.getLooper());
 
-        Log.d(TAG, "Khởi chạy luồng lấy hình ảnh VietMap...");
+        Log.d(TAG, "Bắt đầu tiến trình streaming camera VietMap (" + detectedGatewayIp + ")...");
 
         if (statusListener != null) {
-            statusListener.onStatusUpdated("Đang kết nối luồng Camera...", false);
+            statusListener.onStatusUpdated("Đang kích hoạt Camera (" + detectedGatewayIp + ")...", false);
         }
 
         streamHandler.post(new Runnable() {
@@ -213,203 +194,197 @@ public class VietMapStreamReader {
             public void run() {
                 if (!isStreaming) return;
 
-                int nextDelay = 300;
-                Bitmap sampleFrame = null;
-                try {
-                    sampleFrame = fetchFrame();
-                    if (sampleFrame != null) {
-                        consecutiveFailures = 0;
-                        if (callback != null) {
-                            callback.onFrameCaptured(sampleFrame);
-                        }
-                        if (detector != null) {
-                            detector.processFrame(sampleFrame);
-                        }
-                        nextDelay = 200; // ~5 FPS khi có luồng hình ổn định
-                    } else {
-                        consecutiveFailures++;
-                        if (consecutiveFailures > 4) {
-                            nextDelay = 600; // Giãn nhịp khi đang quét để tránh tràn bộ đệm
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Lỗi lấy khung hình Camera VietMap", e);
-                    if (callback != null) {
-                        callback.onStreamError(e.getMessage());
-                    }
+                ensureWifiNetworkBound();
+                detectedGatewayIp = getCameraGatewayIp();
+
+                // 1. Kích hoạt camera
+                sendNovatekHandshake(detectedGatewayIp);
+
+                // 2. Thử mở luồng persistent TCP Socket MJPEG (Port 8192 & 8080)
+                if (statusListener != null) {
+                    statusListener.onStatusUpdated("Đang mở luồng Live (Port 8192)...", false);
+                }
+                boolean streamActive = streamMjpegSocketLoop(detectedGatewayIp, 8192);
+
+                if (!streamActive && isStreaming) {
                     if (statusListener != null) {
-                        statusListener.onStatusUpdated("Lỗi luồng: " + e.getMessage(), false);
+                        statusListener.onStatusUpdated("Đang thử luồng Live (Port 8080)...", false);
                     }
-                } finally {
-                    if (sampleFrame != null && !sampleFrame.isRecycled()) {
-                        sampleFrame.recycle();
+                    streamActive = streamMjpegSocketLoop(detectedGatewayIp, 8080);
+                }
+
+                if (!streamActive && isStreaming) {
+                    // 3. Fallback sang HTTP Snapshot CGI polling (?cmd=2017 hoặc snapshot.cgi)
+                    if (statusListener != null) {
+                        statusListener.onStatusUpdated("Đang thử luồng Snapshot (" + detectedGatewayIp + ")...", false);
+                    }
+                    Bitmap snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/?custom=1&cmd=2017");
+                    if (snap == null) {
+                        snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/cgi-bin/snapshot.cgi");
+                    }
+                    if (snap == null) {
+                        snap = fetchHttpSnapshotFrame("http://" + detectedGatewayIp + "/snapshot.jpg");
+                    }
+
+                    if (snap != null) {
+                        if (statusListener != null) {
+                            statusListener.onStatusUpdated("Đã nhận luồng Camera (Snapshot CGI)", true);
+                        }
+                        if (callback != null) callback.onFrameCaptured(snap);
+                        if (detector != null) detector.processFrame(snap);
+                        snap.recycle();
+                        streamActive = true;
+                    } else {
+                        // 4. Fallback sang RTSP
+                        long now = System.currentTimeMillis();
+                        if (now - lastRtspAttemptTime > 3000) {
+                            lastRtspAttemptTime = now;
+                            if (statusListener != null) {
+                                statusListener.onStatusUpdated("Đang dò tìm luồng RTSP...", false);
+                            }
+                            Bitmap rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/pjfirst");
+                            if (rtspBmp == null) {
+                                rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/sjcam.mov");
+                            }
+                            if (rtspBmp == null) {
+                                rtspBmp = fetchRtspFrameSafe("rtsp://" + detectedGatewayIp + "/live");
+                            }
+                            if (rtspBmp != null) {
+                                if (statusListener != null) {
+                                    statusListener.onStatusUpdated("Đã nhận luồng Camera (RTSP)", true);
+                                }
+                                if (callback != null) callback.onFrameCaptured(rtspBmp);
+                                if (detector != null) detector.processFrame(rtspBmp);
+                                rtspBmp.recycle();
+                                streamActive = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!streamActive && isStreaming) {
+                    if (statusListener != null) {
+                        statusListener.onStatusUpdated("Đang kết nối lại Camera (" + detectedGatewayIp + ")...", false);
                     }
                 }
 
                 if (isStreaming && streamHandler != null) {
-                    streamHandler.postDelayed(this, nextDelay);
+                    streamHandler.postDelayed(this, streamActive ? 150 : 800);
                 }
             }
         });
     }
 
-    private Bitmap fetchFrame() {
-        detectedGatewayIp = getCameraGatewayIp();
-        String[] httpEndpoints = getCandidateHttpEndpoints(detectedGatewayIp);
-        String[] rtspUrls = getCandidateRtspUrls(detectedGatewayIp);
-
-        long currentTime = System.currentTimeMillis();
-
-        // 1. Gửi lệnh Wakeup định kỳ mỗi 8 giây nếu chưa có hình
-        if (currentTime - lastWakeUpAttemptTime > 8000) {
-            lastWakeUpAttemptTime = currentTime;
-            sendNovatekWakeupCommand(detectedGatewayIp);
-        }
-
-        // 2. Thử Endpoint HTTP / MJPEG active trước
-        if (activeSnapshotEndpointIndex < httpEndpoints.length) {
-            String activeEndpoint = httpEndpoints[activeSnapshotEndpointIndex];
-            Bitmap bmp = activeEndpoint.contains(":8192") || activeEndpoint.contains("stream") 
-                    ? fetchMjpegStreamFrame(activeEndpoint) 
-                    : fetchHttpSnapshotFrame(activeEndpoint);
-            if (bmp != null) {
-                if (statusListener != null) {
-                    statusListener.onStatusUpdated("Đã nhận luồng Camera (Live)", true);
-                }
-                return bmp;
-            }
-        }
-        
-        // 3. Quét luân phiên các endpoint HTTP & MJPEG khác
-        for (int i = 0; i < httpEndpoints.length; i++) {
-            if (i == activeSnapshotEndpointIndex) continue;
-            String candidate = httpEndpoints[i];
-            Bitmap bmp = candidate.contains(":8192") || candidate.contains("stream") 
-                    ? fetchMjpegStreamFrame(candidate) 
-                    : fetchHttpSnapshotFrame(candidate);
-            if (bmp != null) {
-                activeSnapshotEndpointIndex = i;
-                if (statusListener != null) {
-                    statusListener.onStatusUpdated("Đã nhận luồng Camera (Live)", true);
-                }
-                return bmp;
-            }
-        }
-
-        // 4. Fallback sang RTSP với khoảng giãn 3 giây/lần
-        if (currentTime - lastRtspAttemptTime > 3000) {
-            lastRtspAttemptTime = currentTime;
-            for (String rtspCandidate : rtspUrls) {
-                Bitmap rtspBitmap = fetchRtspFrameSafe(rtspCandidate);
-                if (rtspBitmap != null) {
-                    if (statusListener != null) {
-                        statusListener.onStatusUpdated("Đã nhận luồng Camera (RTSP)", true);
-                    }
-                    return rtspBitmap;
-                }
-            }
-        }
-
-        if (statusListener != null) {
-            statusListener.onStatusUpdated("Đang dò tìm luồng (" + detectedGatewayIp + ")...", false);
-        }
-        return null;
-    }
-
-    private Bitmap fetchMjpegStreamFrame(String mjpegUrl) {
-        HttpURLConnection conn = null;
+    /**
+     * Bộ giải mã MJPEG thời gian thực qua Persistent TCP Socket:
+     * Giữ nguyên 1 kết nối duy nhất, liên tục nhận và bóc tách từng khung hình JPEG (0xFF 0xD8 -> 0xFF 0xD9)
+     */
+    private boolean streamMjpegSocketLoop(String host, int port) {
+        Socket socket = null;
         InputStream in = null;
         try {
-            URL url = new URL(mjpegUrl);
+            ensureWifiNetworkBound();
             if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                conn = (HttpURLConnection) cameraWifiNetwork.openConnection(url);
+                socket = cameraWifiNetwork.getSocketFactory().createSocket();
             } else {
-                conn = (HttpURLConnection) url.openConnection();
+                socket = new Socket();
             }
-            conn.setConnectTimeout(1200);
-            conn.setReadTimeout(1800);
-            conn.setUseCaches(false);
-            conn.setRequestProperty("User-Agent", "VietMap/1.0");
-            conn.setRequestProperty("Accept", "*/*");
-            conn.connect();
+            socket.setSoTimeout(3000);
+            socket.connect(new InetSocketAddress(host, port), 1800);
 
-            int code = conn.getResponseCode();
-            if (code == 200) {
-                in = conn.getInputStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream(65536);
-                int prev = -1;
-                int cur;
-                boolean inJpeg = false;
-                long startTime = System.currentTimeMillis();
+            OutputStream out = socket.getOutputStream();
+            String getReq = "GET / HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nUser-Agent: VietMap/1.0\r\nAccept: */*\r\nConnection: keep-alive\r\n\r\n";
+            out.write(getReq.getBytes());
+            out.flush();
 
-                while ((cur = in.read()) != -1) {
-                    if (System.currentTimeMillis() - startTime > 1800) break;
+            in = new BufferedInputStream(socket.getInputStream(), 65536);
+            ByteArrayOutputStream frameBuffer = new ByteArrayOutputStream(65536);
+            byte[] readBuffer = new byte[8192];
+            int bytesRead;
+            boolean inJpeg = false;
+            int lastByte = -1;
+            long lastFrameTime = System.currentTimeMillis();
+            int frameCount = 0;
+
+            while (isStreaming && (bytesRead = in.read(readBuffer)) != -1) {
+                for (int i = 0; i < bytesRead; i++) {
+                    int currentByte = readBuffer[i] & 0xFF;
 
                     if (!inJpeg) {
-                        if (prev == 0xFF && cur == 0xD8) {
+                        if (lastByte == 0xFF && currentByte == 0xD8) {
                             inJpeg = true;
-                            baos.write(0xFF);
-                            baos.write(0xD8);
+                            frameBuffer.reset();
+                            frameBuffer.write(0xFF);
+                            frameBuffer.write(0xD8);
                         }
                     } else {
-                        baos.write(cur);
-                        if (prev == 0xFF && cur == 0xD9) {
-                            byte[] jpegData = baos.toByteArray();
-                            BitmapFactory.Options opts = new BitmapFactory.Options();
-                            opts.inSampleSize = 2;
-                            return BitmapFactory.decodeByteArray(jpegData, 0, jpegData.length, opts);
+                        frameBuffer.write(currentByte);
+                        if (lastByte == 0xFF && currentByte == 0xD9) {
+                            inJpeg = false;
+                            byte[] jpegBytes = frameBuffer.toByteArray();
+                            if (jpegBytes.length > 2048) {
+                                BitmapFactory.Options opts = new BitmapFactory.Options();
+                                opts.inSampleSize = 2; // Tăng tốc độ giải mã AI
+                                Bitmap bmp = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length, opts);
+                                if (bmp != null) {
+                                    frameCount++;
+                                    lastFrameTime = System.currentTimeMillis();
+                                    if (statusListener != null) {
+                                        statusListener.onStatusUpdated("Đã nhận luồng Camera (Live MJPEG)", true);
+                                    }
+                                    if (callback != null) {
+                                        callback.onFrameCaptured(bmp);
+                                    }
+                                    if (detector != null) {
+                                        detector.processFrame(bmp);
+                                    }
+                                    bmp.recycle();
+                                }
+                            }
+                            frameBuffer.reset();
                         }
                     }
-                    prev = cur;
+                    lastByte = currentByte;
+                }
+
+                // Gửi Heartbeat duy trì phiên mỗi 5 giây
+                if (System.currentTimeMillis() - lastWakeUpAttemptTime > 5000) {
+                    lastWakeUpAttemptTime = System.currentTimeMillis();
+                    sendNovatekHandshake(host);
+                }
+
+                // Nếu quá 3.5s không nhận được khung hình -> socket bị nghẽn, ngắt để tái kết nối
+                if (System.currentTimeMillis() - lastFrameTime > 3500) {
+                    Log.w(TAG, "Socket port " + port + " timeout không có frame mới -> Reconnect");
+                    break;
                 }
             }
-        } catch (Exception ignored) {
+            return frameCount > 0;
+        } catch (Exception e) {
+            Log.d(TAG, "Socket stream port " + port + " info: " + e.getMessage());
+            return false;
         } finally {
             if (in != null) {
                 try { in.close(); } catch (Exception ignored) {}
             }
-            if (conn != null) {
-                conn.disconnect();
+            if (socket != null) {
+                try { socket.close(); } catch (Exception ignored) {}
             }
         }
-        return null;
-    }
-
-    private Bitmap fetchRtspFrameSafe(String url) {
-        MediaMetadataRetriever mmr = null;
-        try {
-            mmr = new MediaMetadataRetriever();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-                HashMap<String, String> headers = new HashMap<String, String>();
-                headers.put("User-Agent", "VietMap AI");
-                mmr.setDataSource(url, headers);
-            } else {
-                mmr.setDataSource(url);
-            }
-            return mmr.getFrameAtTime(-1);
-        } catch (Exception e) {
-            Log.d(TAG, "RTSP probe (" + url + ") failed: " + e.getMessage());
-        } finally {
-            if (mmr != null) {
-                try {
-                    mmr.release();
-                } catch (Throwable ignored) {}
-            }
-        }
-        return null;
     }
 
     private Bitmap fetchHttpSnapshotFrame(String snapshotUrl) {
         HttpURLConnection connection = null;
         InputStream input = null;
         try {
+            ensureWifiNetworkBound();
             URL url = new URL(snapshotUrl);
             if (cameraWifiNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 connection = (HttpURLConnection) cameraWifiNetwork.openConnection(url);
             } else {
                 connection = (HttpURLConnection) url.openConnection();
             }
-            connection.setConnectTimeout(1200);
+            connection.setConnectTimeout(1000);
             connection.setReadTimeout(1200);
             connection.setUseCaches(false);
             connection.setDoInput(true);
@@ -427,12 +402,35 @@ public class VietMapStreamReader {
         } catch (Exception ignored) {
         } finally {
             if (input != null) {
-                try {
-                    input.close();
-                } catch (Exception ignored) {}
+                try { input.close(); } catch (Exception ignored) {}
             }
             if (connection != null) {
                 connection.disconnect();
+            }
+        }
+        return null;
+    }
+
+    private Bitmap fetchRtspFrameSafe(String url) {
+        MediaMetadataRetriever mmr = null;
+        try {
+            ensureWifiNetworkBound();
+            mmr = new MediaMetadataRetriever();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+                HashMap<String, String> headers = new HashMap<String, String>();
+                headers.put("User-Agent", "VietMap AI");
+                mmr.setDataSource(url, headers);
+            } else {
+                mmr.setDataSource(url);
+            }
+            return mmr.getFrameAtTime(-1);
+        } catch (Exception e) {
+            Log.d(TAG, "RTSP probe (" + url + ") failed: " + e.getMessage());
+        } finally {
+            if (mmr != null) {
+                try {
+                    mmr.release();
+                } catch (Throwable ignored) {}
             }
         }
         return null;

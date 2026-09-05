@@ -18,7 +18,15 @@ import java.util.List;
 public class VietMapWifiScanner {
     private static final String TAG = "VietMapWifiScanner";
     private static final String[] VIETMAP_KEYWORDS = {
-        "Vietmap-TS-C1_423ced"
+        "Vietmap-TS-C1_423ced",
+        "Vietmap",
+        "VIETMAP",
+        "TS-C1",
+        "TS2K",
+        "KC01",
+        "C61",
+        "C65",
+        "SpeedMap"
     };
 
     public interface WifiScanListener {
