@@ -18,12 +18,14 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("release.keystore")
-            storePassword "openclaw123"
-            keyAlias "openclaw"
-            keyPassword "openclaw123"
-            v1SigningEnabled true
-            v2SigningEnabled true
+            if (file("release.keystore").exists()) {
+                storeFile file("release.keystore")
+                storePassword "openclaw123"
+                keyAlias "openclaw"
+                keyPassword "openclaw123"
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
         }
     }
 
@@ -35,11 +37,15 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            if (file("release.keystore").exists()) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            signingConfig signingConfigs.release
+            if (file("release.keystore").exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
