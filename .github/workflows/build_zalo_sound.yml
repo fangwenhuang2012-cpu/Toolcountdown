@@ -33,15 +33,18 @@ jobs:
 
     - name: Generate Release Keystore
       run: |
-        keytool -genkeypair -noprompt -alias openclaw -keyalg RSA -keysize 2048 -validity 10000 -keystore Android_Zalo_Sound/app/release.keystore -storepass openclaw123 -keypass openclaw123 -dname "CN=ZaloSoundPro, OU=OpenClaw, O=OpenClaw, L=HCM, ST=HCM, C=VN" -storetype JKS
+        keytool -genkey -v -keystore Android_Zalo_Sound/app/release.keystore \
+          -alias openclaw -keyalg RSA -keysize 2048 -validity 10000 \
+          -storepass openclaw123 -keypass openclaw123 \
+          -dname "CN=ZaloSoundPro, OU=OpenClaw, O=OpenClaw, L=HCM, ST=HCM, C=VN"
 
-    - name: Build APK
+    - name: Build Signed Release APK
       run: |
         cd Android_Zalo_Sound
-        gradle assembleRelease --stacktrace
+        gradle assembleRelease
 
-    - name: Upload Zalo Notification Sound Pro APK
+    - name: Upload Signed Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: Zalo_Notification_Sound_Pro_APK
-        path: Android_Zalo_Sound/app/build/outputs/apk/release/Zalo_Notification_Sound_Pro_v1.0.apk
+        name: Zalo_Notification_Sound_Pro_Signed_APK
+        path: Android_Zalo_Sound/app/build/outputs/apk/release/*.apk
