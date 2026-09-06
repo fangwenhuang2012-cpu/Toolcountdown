@@ -29,7 +29,7 @@ jobs:
     - name: Build APK
       run: |
         cd Android_Zalo_Sound
-        gradle assembleDebug
+        gradle assembleDebug --stacktrace
 
     - name: Upload Zalo Notification Sound Pro APK
       uses: actions/upload-artifact@v4
