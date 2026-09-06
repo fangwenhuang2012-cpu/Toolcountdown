@@ -1,0 +1,38 @@
+name: Build Zalo Notification Sound Pro APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.2'
+
+    - name: Build APK
+      run: |
+        cd Android_Zalo_Sound
+        gradle assembleDebug
+
+    - name: Upload Zalo Notification Sound Pro APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Zalo_Notification_Sound_Pro_APK
+        path: Android_Zalo_Sound/app/build/outputs/apk/debug/*.apk

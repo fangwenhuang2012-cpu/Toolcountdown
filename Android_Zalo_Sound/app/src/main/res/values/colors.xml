@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#0068FF</color>
+    <color name="primary_dark">#0052CC</color>
+    <color name="primary_light">#E5EFFF</color>
+    <color name="accent">#00C853</color>
+    
+    <!-- Backgrounds & Surfaces (Modern Dark Theme) -->
+    <color name="bg_dark">#12161A</color>
+    <color name="card_dark">#1E232A</color>
+    <color name="card_stroke">#2D3540</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#9EABB8</color>
+    <color name="text_muted">#616E7C</color>
+    
+    <!-- Status Colors -->
+    <color name="status_active">#00E676</color>
+    <color name="status_inactive">#FF5252</color>
+    <color name="status_active_bg">#1A00E676</color>
+    <color name="status_inactive_bg">#1AFF5252</color>
+    
+    <!-- Button & Badge Colors -->
+    <color name="btn_test">#0068FF</color>
+    <color name="badge_1_1">#2979FF</color>
+    <color name="badge_group">#FF9100</color>
+</resources>

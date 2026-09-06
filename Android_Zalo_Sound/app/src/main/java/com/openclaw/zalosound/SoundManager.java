@@ -1,0 +1,197 @@
+package com.openclaw.zalosound;
+
+import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
+import android.util.Log;
+
+public class SoundManager {
+    private static final String TAG = "ZaloSoundManager";
+    private static final long DEBOUNCE_MS = 1800; // 1.8 seconds debounce
+
+    private static SoundManager instance;
+    private final Context context;
+    private final PrefsHelper prefs;
+    private MediaPlayer mediaPlayer;
+    private long lastDirectPlayTime = 0;
+    private long lastGroupPlayTime = 0;
+
+    // Built-in sound indices
+    public static final int SOUND_ZALO_CLASSIC = 0;
+    public static final int SOUND_TING_MODERN = 1;
+    public static final int SOUND_DING_SOFT = 2;
+    public static final int SOUND_POP = 3;
+    public static final int SOUND_MUTE = 4;
+    public static final int SOUND_CUSTOM_FILE = 5;
+
+    public static synchronized SoundManager getInstance(Context context) {
+        if (instance == null) {
+            instance = new SoundManager(context.getApplicationContext());
+        }
+        return instance;
+    }
+
+    private SoundManager(Context context) {
+        this.context = context;
+        this.prefs = new PrefsHelper(context);
+    }
+
+    /**
+     * Phát âm thanh cho Tin nhắn Cá nhân (1-1)
+     */
+    public synchronized void playDirectMessageSound() {
+        if (!prefs.isDirectEnabled()) {
+            Log.d(TAG, "Direct sound disabled in settings.");
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (prefs.isAntiSpamEnabled() && (now - lastDirectPlayTime < DEBOUNCE_MS)) {
+            Log.d(TAG, "Anti-spam debounced direct message sound.");
+            return;
+        }
+        lastDirectPlayTime = now;
+
+        int soundIndex = prefs.getDirectSoundIndex();
+        String customUri = prefs.getDirectCustomUri();
+
+        playSound(soundIndex, customUri);
+        triggerVibrateIfEnabled();
+    }
+
+    /**
+     * Phát âm thanh cho Tin nhắn Nhóm (Group)
+     */
+    public synchronized void playGroupMessageSound() {
+        if (!prefs.isGroupEnabled()) {
+            Log.d(TAG, "Group sound disabled in settings.");
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (prefs.isAntiSpamEnabled() && (now - lastGroupPlayTime < DEBOUNCE_MS)) {
+            Log.d(TAG, "Anti-spam debounced group message sound.");
+            return;
+        }
+        lastGroupPlayTime = now;
+
+        int soundIndex = prefs.getGroupSoundIndex();
+        String customUri = prefs.getGroupCustomUri();
+
+        playSound(soundIndex, customUri);
+        triggerVibrateIfEnabled();
+    }
+
+    /**
+     * Phát thử âm thanh (Test sound)
+     */
+    public synchronized void testSound(int soundIndex, String customUri) {
+        playSound(soundIndex, customUri);
+    }
+
+    private void playSound(int soundIndex, String customUri) {
+        if (soundIndex == SOUND_MUTE) {
+            Log.d(TAG, "Sound is set to MUTE");
+            return;
+        }
+
+        try {
+            releasePlayer();
+
+            mediaPlayer = new MediaPlayer();
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setLegacyStreamType(AudioManager.STREAM_NOTIFICATION)
+                    .build();
+            mediaPlayer.setAudioAttributes(audioAttributes);
+
+            if (soundIndex == SOUND_CUSTOM_FILE && customUri != null && !customUri.isEmpty()) {
+                // Phát từ Custom URI người dùng chọn
+                mediaPlayer.setDataSource(context, Uri.parse(customUri));
+            } else {
+                // Phát file raw tích hợp sẵn
+                int rawResId = getRawResourceForIndex(soundIndex);
+                if (rawResId != 0) {
+                    Uri soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + rawResId);
+                    mediaPlayer.setDataSource(context, soundUri);
+                } else {
+                    // Fallback to default notification sound
+                    Uri defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                    mediaPlayer.setDataSource(context, defaultUri);
+                }
+            }
+
+            mediaPlayer.setOnPreparedListener(mp -> mp.start());
+            mediaPlayer.setOnCompletionListener(mp -> releasePlayer());
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                Log.e(TAG, "MediaPlayer error: what=" + what + ", extra=" + extra);
+                releasePlayer();
+                return true;
+            });
+
+            mediaPlayer.prepareAsync();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to play sound index: " + soundIndex, e);
+            releasePlayer();
+        }
+    }
+
+    private int getRawResourceForIndex(int index) {
+        switch (index) {
+            case SOUND_ZALO_CLASSIC:
+                return R.raw.sound_direct_zalo;
+            case SOUND_TING_MODERN:
+                return R.raw.sound_direct_ting;
+            case SOUND_DING_SOFT:
+                return R.raw.sound_ding_soft;
+            case SOUND_POP:
+                return R.raw.sound_group_pop;
+            default:
+                return R.raw.sound_direct_zalo;
+        }
+    }
+
+    private void triggerVibrateIfEnabled() {
+        if (!prefs.isVibrateEnabled()) return;
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                VibratorManager vm = (VibratorManager) context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                if (vm != null) {
+                    vm.getDefaultVibrator().vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE));
+                }
+            } else {
+                Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+                if (v != null && v.hasVibrator()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE));
+                    } else {
+                        v.vibrate(120);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to trigger vibration", e);
+        }
+    }
+
+    private synchronized void releasePlayer() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+            } catch (Exception ignored) {}
+            mediaPlayer = null;
+        }
+    }
+}

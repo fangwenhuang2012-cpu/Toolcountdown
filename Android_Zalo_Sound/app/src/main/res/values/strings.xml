@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zalo Sound Pro</string>
+    <string name="service_name">Zalo Sound Notification Listener</string>
+    
+    <!-- Header -->
+    <string name="title_main">Zalo Sound Pro</string>
+    <string name="subtitle_main">Tự động phân biệt chuông tin nhắn 1-1 và Nhóm</string>
+    
+    <!-- Permission Card -->
+    <string name="permission_title">Quyền đọc thông báo</string>
+    <string name="permission_granted">Đã cấp quyền (Đang hoạt động)</string>
+    <string name="permission_denied">Chưa cấp quyền (Bấm để bật)</string>
+    <string name="btn_grant_permission">Cấp quyền ngay</string>
+    
+    <!-- 1-1 Message Card -->
+    <string name="card_1_1_title">Tin nhắn Cá nhân (1-1)</string>
+    <string name="card_1_1_desc">Áp dụng cho mọi tin nhắn trực tiếp từ bạn bè hoặc người lạ</string>
+    <string name="switch_enable_1_1">Bật chuông tin nhắn 1-1</string>
+    <string name="label_select_sound">Chọn âm thanh:</string>
+    <string name="btn_test_1_1">Nghe thử</string>
+    
+    <!-- Group Message Card -->
+    <string name="card_group_title">Tin nhắn Nhóm (Group Chat)</string>
+    <string name="card_group_desc">Áp dụng cho mọi nhóm chat Zalo</string>
+    <string name="switch_enable_group">Bật chuông tin nhắn Nhóm</string>
+    <string name="btn_test_group">Nghe thử</string>
+    
+    <!-- Advanced Settings -->
+    <string name="card_settings_title">Cài đặt nâng cao</string>
+    <string name="switch_anti_spam">Chống spam chuông liên tục (Debounce 2s)</string>
+    <string name="switch_vibrate">Rung khi có tin nhắn</string>
+    
+    <!-- Setup Guide -->
+    <string name="card_guide_title">Hướng dẫn thiết lập Zalo</string>
+    <string name="guide_step_1">1. Vào Cài đặt máy > Ứng dụng > Zalo > Thông báo.</string>
+    <string name="guide_step_2">2. Chọn mục Thông báo tin nhắn > Đặt Âm thanh thành "Im lặng" (hoặc Không chuông).</string>
+    <string name="guide_step_3">3. Bật ứng dụng này lên để tự động phát chuông chuẩn theo loại tin nhắn!</string>
+    <string name="btn_open_zalo_settings">Mở cài đặt thông báo Zalo</string>
+    
+    <!-- Sound Names -->
+    <string name="sound_builtin_zalo">Chuông Zalo Classic</string>
+    <string name="sound_builtin_ting">Chuông Ting Hiện Đại</string>
+    <string name="sound_builtin_iphone">Chuông Ding Nhẹ</string>
+    <string name="sound_builtin_pop">Chuông Pop Pop</string>
+    <string name="sound_builtin_mute">Im lặng (Tắt chuông)</string>
+    <string name="sound_custom_device">Chọn từ điện thoại...</string>
+</resources>
