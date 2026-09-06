@@ -4,7 +4,9 @@ import android.content.Context;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.Ringtone;
 import android.media.RingtoneManager;
+import android.media.SoundPool;
 import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
@@ -12,14 +14,26 @@ import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.util.Log;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class SoundManager {
     private static final String TAG = "ZaloSoundManager";
-    private static final long DEBOUNCE_MS = 1800; // 1.8 seconds debounce
+    private static final long DEBOUNCE_MS = 1800; // 1.8 seconds anti-spam
 
     private static SoundManager instance;
     private final Context context;
     private final PrefsHelper prefs;
+
+    // SoundPool for zero-latency, instant sound playback
+    private SoundPool soundPool;
+    private final Map<Integer, Integer> soundMap = new HashMap<>();
+    private boolean isSoundPoolLoaded = false;
+
+    // MediaPlayer fallback for custom user-selected audio files
     private MediaPlayer mediaPlayer;
+    private Ringtone currentRingtone;
+
     private long lastDirectPlayTime = 0;
     private long lastGroupPlayTime = 0;
 
@@ -41,6 +55,35 @@ public class SoundManager {
     private SoundManager(Context context) {
         this.context = context;
         this.prefs = new PrefsHelper(context);
+        initSoundPool();
+    }
+
+    private void initSoundPool() {
+        try {
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setLegacyStreamType(AudioManager.STREAM_NOTIFICATION)
+                    .build();
+
+            soundPool = new SoundPool.Builder()
+                    .setMaxStreams(4)
+                    .setAudioAttributes(audioAttributes)
+                    .build();
+
+            soundMap.put(SOUND_ZALO_CLASSIC, soundPool.load(context, R.raw.sound_direct_zalo, 1));
+            soundMap.put(SOUND_TING_MODERN, soundPool.load(context, R.raw.sound_direct_ting, 1));
+            soundMap.put(SOUND_DING_SOFT, soundPool.load(context, R.raw.sound_ding_soft, 1));
+            soundMap.put(SOUND_POP, soundPool.load(context, R.raw.sound_group_pop, 1));
+
+            soundPool.setOnLoadCompleteListener((pool, sampleId, status) -> {
+                if (status == 0) {
+                    isSoundPoolLoaded = true;
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing SoundPool", e);
+        }
     }
 
     /**
@@ -102,45 +145,72 @@ public class SoundManager {
             return;
         }
 
-        try {
-            releasePlayer();
+        // 1. Nếu là âm thanh từ file người dùng chọn
+        if (soundIndex == SOUND_CUSTOM_FILE && customUri != null && !customUri.isEmpty()) {
+            playCustomUri(customUri);
+            return;
+        }
 
-            mediaPlayer = new MediaPlayer();
-            AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setLegacyStreamType(AudioManager.STREAM_NOTIFICATION)
-                    .build();
-            mediaPlayer.setAudioAttributes(audioAttributes);
-
-            if (soundIndex == SOUND_CUSTOM_FILE && customUri != null && !customUri.isEmpty()) {
-                // Phát từ Custom URI người dùng chọn
-                mediaPlayer.setDataSource(context, Uri.parse(customUri));
-            } else {
-                // Phát file raw tích hợp sẵn
-                int rawResId = getRawResourceForIndex(soundIndex);
-                if (rawResId != 0) {
-                    Uri soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + rawResId);
-                    mediaPlayer.setDataSource(context, soundUri);
-                } else {
-                    // Fallback to default notification sound
-                    Uri defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                    mediaPlayer.setDataSource(context, defaultUri);
+        // 2. Nếu là âm thanh tích hợp sẵn -> Dùng SoundPool phát tức thì 0ms latency
+        if (soundPool != null && soundMap.containsKey(soundIndex)) {
+            Integer poolId = soundMap.get(soundIndex);
+            if (poolId != null) {
+                int streamId = soundPool.play(poolId, 1.0f, 1.0f, 1, 0, 1.0f);
+                if (streamId != 0) {
+                    return;
                 }
             }
+        }
 
-            mediaPlayer.setOnPreparedListener(mp -> mp.start());
-            mediaPlayer.setOnCompletionListener(mp -> releasePlayer());
-            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                Log.e(TAG, "MediaPlayer error: what=" + what + ", extra=" + extra);
-                releasePlayer();
-                return true;
-            });
+        // 3. Fallback sang MediaPlayer nếu SoundPool chưa sẵn sàng
+        playFallbackRawSound(soundIndex);
+    }
 
+    private void playCustomUri(String uriString) {
+        try {
+            stopCustomAudio();
+            Uri uri = Uri.parse(uriString);
+            currentRingtone = RingtoneManager.getRingtone(context, uri);
+            if (currentRingtone != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    AudioAttributes attributes = new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build();
+                    currentRingtone.setAudioAttributes(attributes);
+                }
+                currentRingtone.play();
+                return;
+            }
+
+            // Fallback to MediaPlayer
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            mediaPlayer.setDataSource(context, uri);
+            mediaPlayer.setOnPreparedListener(MediaPlayer::start);
+            mediaPlayer.setOnCompletionListener(mp -> stopCustomAudio());
             mediaPlayer.prepareAsync();
         } catch (Exception e) {
-            Log.e(TAG, "Failed to play sound index: " + soundIndex, e);
-            releasePlayer();
+            Log.e(TAG, "Failed to play custom URI sound: " + uriString, e);
+        }
+    }
+
+    private void playFallbackRawSound(int soundIndex) {
+        try {
+            stopCustomAudio();
+            int rawResId = getRawResourceForIndex(soundIndex);
+            if (rawResId != 0) {
+                mediaPlayer = MediaPlayer.create(context, rawResId);
+                if (mediaPlayer != null) {
+                    mediaPlayer.setOnCompletionListener(mp -> stopCustomAudio());
+                    mediaPlayer.start();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Fallback MediaPlayer failed", e);
         }
     }
 
@@ -183,15 +253,20 @@ public class SoundManager {
         }
     }
 
-    private synchronized void releasePlayer() {
-        if (mediaPlayer != null) {
-            try {
+    private synchronized void stopCustomAudio() {
+        try {
+            if (currentRingtone != null && currentRingtone.isPlaying()) {
+                currentRingtone.stop();
+            }
+            currentRingtone = null;
+
+            if (mediaPlayer != null) {
                 if (mediaPlayer.isPlaying()) {
                     mediaPlayer.stop();
                 }
                 mediaPlayer.release();
-            } catch (Exception ignored) {}
-            mediaPlayer = null;
-        }
+                mediaPlayer = null;
+            }
+        } catch (Exception ignored) {}
     }
 }
