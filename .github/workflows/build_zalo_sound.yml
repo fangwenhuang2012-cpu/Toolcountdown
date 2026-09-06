@@ -3,8 +3,13 @@ name: Build Zalo Notification Sound Pro APK
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "Android_Zalo_Sound/**"
+      - ".github/workflows/build_zalo_sound.yml"
   pull_request:
     branches: [ "main" ]
+    paths:
+      - "Android_Zalo_Sound/**"
   workflow_dispatch:
 
 jobs:
