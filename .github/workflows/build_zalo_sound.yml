@@ -31,13 +31,20 @@ jobs:
       with:
         gradle-version: '8.2'
 
-    - name: Build APK
+    - name: Generate Release Keystore
+      run: |
+        keytool -genkey -v -keystore Android_Zalo_Sound/app/release.keystore \
+          -alias openclaw -keyalg RSA -keysize 2048 -validity 10000 \
+          -storepass openclaw123 -keypass openclaw123 \
+          -dname "CN=ZaloSoundPro, OU=OpenClaw, O=OpenClaw, L=HCM, ST=HCM, C=VN"
+
+    - name: Build Signed Release APK
       run: |
         cd Android_Zalo_Sound
-        gradle assembleDebug --stacktrace
+        gradle assembleRelease --stacktrace
 
-    - name: Upload Zalo Notification Sound Pro APK
+    - name: Upload Signed Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: Zalo_Notification_Sound_Pro_APK
-        path: Android_Zalo_Sound/app/build/outputs/apk/debug/*.apk
+        name: Zalo_Notification_Sound_Pro_Signed_APK
+        path: Android_Zalo_Sound/app/build/outputs/apk/release/*.apk
