@@ -18,15 +18,20 @@ import java.util.List;
 public class VietMapWifiScanner {
     private static final String TAG = "VietMapWifiScanner";
     private static final String[] VIETMAP_KEYWORDS = {
-        "Vietmap-TS-C1_423ced",
-        "Vietmap",
-        "VIETMAP",
-        "TS-C1",
-        "TS2K",
-        "KC01",
-        "C61",
-        "C65",
-        "SpeedMap"
+        "vietmap",
+        "ts-c1",
+        "ts2k",
+        "ts-2k",
+        "kc01",
+        "c61",
+        "c62",
+        "c63",
+        "c65",
+        "speedmap",
+        "r4a",
+        "papago",
+        "dashcam",
+        "idvr"
     };
 
     public interface WifiScanListener {
@@ -52,7 +57,7 @@ public class VietMapWifiScanner {
             return;
         }
 
-        // Kiểm tra xem đã kết nối sẵn chưa
+        // Kiểm tra xem đã kết nối sẵn tới Wi-Fi camera hợp lệ chưa
         String currentSsid = getCurrentWifiSSID();
         if (isVietMapSSID(currentSsid)) {
             Log.d(TAG, "Đã kết nối sẵn tới: " + currentSsid);
@@ -101,10 +106,10 @@ public class VietMapWifiScanner {
                         }
                         found = true;
                     }
-                    if (!found && attempts < 2) { // Try for 10 seconds
+                    if (!found && attempts < 4) { // Dò nhiều đợt để bắt kịp sóng cam
                         wifiManager.startScan();
                         attempts++;
-                        handler.postDelayed(this, 5000);
+                        handler.postDelayed(this, 4000);
                     } else if (!found) {
                         Log.d(TAG, "Không tìm thấy Wi-Fi Camera VietMap sau nhiều lần quét");
                         if (listener != null) {
@@ -119,15 +124,34 @@ public class VietMapWifiScanner {
         handler.post(scanRunnable);
     }
 
-    private boolean isVietMapSSID(String ssid) {
-        if (ssid == null) return false;
-        String ssidLower = ssid.toLowerCase();
+    public boolean isVietMapSSID(String ssid) {
+        if (ssid == null || ssid.trim().isEmpty()) return false;
+        String s = ssid.trim();
+        if (s.equals("<unknown ssid>") || s.equals("0x") || s.equals("\"\"") || s.equals("Chưa kết nối Wi-Fi Camera VietMap")) {
+            return false;
+        }
+        String ssidLower = s.toLowerCase();
+        if (ssidLower.startsWith("chưa") || ssidLower.startsWith("đang") || ssidLower.startsWith("lỗi") || 
+            ssidLower.startsWith("hủy") || ssidLower.startsWith("phát hiện") || ssidLower.startsWith("vui lòng")) {
+            return false;
+        }
         for (String keyword : VIETMAP_KEYWORDS) {
             if (ssidLower.contains(keyword.toLowerCase())) {
                 return true;
             }
         }
         return false;
+    }
+
+    public void openWifiSettings() {
+        try {
+            android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            if (listener != null) listener.onError("Đã mở Cài đặt Wi-Fi. Vui lòng chọn Wi-Fi Camera VietMap");
+        } catch (Exception e) {
+            Log.e(TAG, "Lỗi khi mở cài đặt Wi-Fi", e);
+        }
     }
 
     public void connectToVietMapCam(final String ssid, final String passwordParam) {
@@ -235,8 +259,8 @@ public class VietMapWifiScanner {
             try {
                 android.net.wifi.WifiInfo info = wifiManager.getConnectionInfo();
                 if (info != null && info.getSSID() != null) {
-                    String ssid = info.getSSID().replace("\"", "");
-                    if (!ssid.equals("<unknown ssid>") && !ssid.isEmpty()) {
+                    String ssid = info.getSSID().replace("\"", "").trim();
+                    if (!ssid.equals("<unknown ssid>") && !ssid.equals("0x") && !ssid.isEmpty()) {
                         return ssid;
                     }
                 }

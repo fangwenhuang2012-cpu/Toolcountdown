@@ -203,6 +203,32 @@ public class VietMapStreamReader {
         }
     }
 
+    public boolean isWifiAvailable() {
+        if (context == null) return false;
+        try {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    Network[] networks = cm.getAllNetworks();
+                    if (networks != null) {
+                        for (Network net : networks) {
+                            NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+                            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                                return true;
+                            }
+                        }
+                    }
+                } else {
+                    android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
+                    if (ni != null && ni.getType() == ConnectivityManager.TYPE_WIFI && ni.isConnected()) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
     public void startStreaming() {
         if (isStreaming) return;
         isStreaming = true;
@@ -219,6 +245,16 @@ public class VietMapStreamReader {
             @Override
             public void run() {
                 if (!isStreaming) return;
+
+                if (!isWifiAvailable()) {
+                    if (statusListener != null) {
+                        statusListener.onStatusUpdated("Chờ kết nối Wi-Fi Camera VietMap...", false);
+                    }
+                    if (isStreaming && streamHandler != null) {
+                        streamHandler.postDelayed(this, 3000);
+                    }
+                    return;
+                }
 
                 ensureWifiNetworkBound();
                 List<String> candidateIps = getCandidateIps();

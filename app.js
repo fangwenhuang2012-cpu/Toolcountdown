@@ -339,21 +339,32 @@ window.updateSystemStatus = function(wifiSsid, streamStatus, gpsSpeed, aiStatus)
     if (valAi && aiStatus) valAi.textContent = aiStatus;
 };
 
-window.submitWifiPass = function() {
-    const input = document.getElementById('wifiPassInput');
-    let pass = input ? input.value.trim() : "";
-    if (!pass) pass = "12345678"; // Default password
-    
-    if (currentDetectedSsid && window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
-        const valWifi = document.getElementById('valWifi');
-        if (valWifi) valWifi.textContent = "Đang thử kết nối...";
-        window.AndroidBridge.submitWifiPassword(currentDetectedSsid, pass);
+window.isVietMapWifiConnected = function(ssid) {
+    if (!ssid) return false;
+    const lower = ssid.toLowerCase().trim();
+    if (lower.startsWith("chưa") || lower.startsWith("đang") || lower.startsWith("lỗi") || 
+        lower.startsWith("hủy") || lower.startsWith("phát hiện") || lower.startsWith("vui lòng")) {
+        return false;
+    }
+    const keywords = ["vietmap", "ts-c1", "ts2k", "ts-2k", "kc01", "c61", "c62", "c63", "c65", "speedmap", "r4a", "papago", "dashcam", "idvr", "đã kết nối"];
+    for (let i = 0; i < keywords.length; i++) {
+        if (lower.includes(keywords[i])) return true;
+    }
+    return false;
+};
+
+window.rescanWifi = function() {
+    const valWifi = document.getElementById('valWifi');
+    if (valWifi) valWifi.textContent = "Đang dò lại Wi-Fi...";
+    if (window.AndroidBridge && window.AndroidBridge.rescanWifi) {
+        window.AndroidBridge.rescanWifi();
     }
 };
 
 window.openWifiSettings = function() {
-    if (window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
-        // Triggering the open settings fallback by sending a generic SSID that we catch in Java
+    if (window.AndroidBridge && window.AndroidBridge.openWifiSettings) {
+        window.AndroidBridge.openWifiSettings();
+    } else if (window.AndroidBridge && window.AndroidBridge.submitWifiPassword) {
         window.AndroidBridge.submitWifiPassword("Camera VietMap", "");
     }
 };

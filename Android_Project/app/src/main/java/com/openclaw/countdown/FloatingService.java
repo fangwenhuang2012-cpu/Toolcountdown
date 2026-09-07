@@ -511,6 +511,38 @@ public class FloatingService extends Service {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void openWifiSettings() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (wifiScanner != null) {
+                        wifiScanner.openWifiSettings();
+                    } else {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                        } catch (Exception ignored) {}
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void rescanWifi() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    currentWifiSsid = "Đang dò Wi-Fi VietMap...";
+                    pushStatusToUi();
+                    if (wifiScanner != null) {
+                        wifiScanner.scanForVietMapCam();
+                    }
+                }
+            });
+        }
     }
 
     private void createNotificationChannel() {
