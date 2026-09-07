@@ -22,6 +22,8 @@ public class ZaloNotificationService extends NotificationListenerService {
         if (sbn == null) return;
 
         NotificationClassifier.ClassificationResult result = NotificationClassifier.classify(sbn);
+        String notifKey = sbn.getKey();
+        int notifId = sbn.getId();
         String senderOrGroup = result.getSenderName();
         String messageText = result.getMessageText();
 
@@ -29,17 +31,17 @@ public class ZaloNotificationService extends NotificationListenerService {
             case DIRECT_1_1:
                 ContactRule rule = prefs.findMatchingRule(senderOrGroup);
                 if (rule != null && rule.isEnabled()) {
-                    Log.i(TAG, ">>> [ZALO VIP CONTACT: " + senderOrGroup + "] Triggering VIP Sound: " + rule.getSoundIndex());
-                    soundManager.playContactSound(rule.getSoundIndex(), rule.getCustomUri(), senderOrGroup, messageText);
+                    Log.i(TAG, ">>> [ZALO VIP CONTACT: " + senderOrGroup + "] Triggering VIP Sound: " + rule.getSoundIndex() + " (Key: " + notifKey + ")");
+                    soundManager.playContactSound(notifKey, notifId, rule.getSoundIndex(), rule.getCustomUri(), senderOrGroup, messageText);
                 } else {
-                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderOrGroup + "] Triggering Default Direct Sound.");
-                    soundManager.playDirectMessageSound(senderOrGroup, messageText);
+                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderOrGroup + "] Triggering Default Direct Sound (Key: " + notifKey + ")");
+                    soundManager.playDirectMessageSound(notifKey, notifId, senderOrGroup, messageText);
                 }
                 break;
 
             case GROUP:
-                Log.i(TAG, ">>> [ZALO GROUP MESSAGE: " + senderOrGroup + "] Triggering Group Sound.");
-                soundManager.playGroupMessageSound(senderOrGroup, messageText);
+                Log.i(TAG, ">>> [ZALO GROUP MESSAGE: " + senderOrGroup + "] Triggering Group Sound (Key: " + notifKey + ")");
+                soundManager.playGroupMessageSound(notifKey, notifId, senderOrGroup, messageText);
                 break;
 
             case CALL:

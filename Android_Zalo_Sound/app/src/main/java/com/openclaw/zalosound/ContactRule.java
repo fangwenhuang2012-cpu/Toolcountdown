@@ -84,7 +84,20 @@ public class ContactRule {
         }
         String cleanSender = sender.trim().toLowerCase();
         String cleanContact = contactName.trim().toLowerCase();
-        return cleanSender.equals(cleanContact);
+
+        if (cleanSender.equals(cleanContact)) {
+            return true;
+        }
+
+        // Khớp thông minh nếu tên người gửi trên Zalo có kèm emoji, biệt danh hoặc danh xưng
+        if (cleanContact.length() >= 2 && cleanSender.contains(cleanContact)) {
+            return true;
+        }
+        if (cleanSender.length() >= 2 && cleanContact.contains(cleanSender)) {
+            return true;
+        }
+
+        return false;
     }
 
     public JSONObject toJson() {
