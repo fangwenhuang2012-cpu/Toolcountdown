@@ -22,23 +22,24 @@ public class ZaloNotificationService extends NotificationListenerService {
         if (sbn == null) return;
 
         NotificationClassifier.ClassificationResult result = NotificationClassifier.classify(sbn);
+        String senderOrGroup = result.getSenderName();
+        String messageText = result.getMessageText();
 
         switch (result.getType()) {
             case DIRECT_1_1:
-                String senderName = result.getSenderName();
-                ContactRule rule = prefs.findMatchingRule(senderName);
+                ContactRule rule = prefs.findMatchingRule(senderOrGroup);
                 if (rule != null && rule.isEnabled()) {
-                    Log.i(TAG, ">>> [ZALO VIP CONTACT MATCHED: " + senderName + "] Playing VIP custom sound index: " + rule.getSoundIndex());
-                    soundManager.playContactSound(rule.getSoundIndex(), rule.getCustomUri());
+                    Log.i(TAG, ">>> [ZALO VIP CONTACT: " + senderOrGroup + "] Triggering VIP Sound: " + rule.getSoundIndex());
+                    soundManager.playContactSound(rule.getSoundIndex(), rule.getCustomUri(), senderOrGroup, messageText);
                 } else {
-                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderName + "] Playing default direct sound.");
-                    soundManager.playDirectMessageSound();
+                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderOrGroup + "] Triggering Default Direct Sound.");
+                    soundManager.playDirectMessageSound(senderOrGroup, messageText);
                 }
                 break;
 
             case GROUP:
-                Log.i(TAG, ">>> [ZALO GROUP MESSAGE] Triggering Group Sound.");
-                soundManager.playGroupMessageSound();
+                Log.i(TAG, ">>> [ZALO GROUP MESSAGE: " + senderOrGroup + "] Triggering Group Sound.");
+                soundManager.playGroupMessageSound(senderOrGroup, messageText);
                 break;
 
             case CALL:

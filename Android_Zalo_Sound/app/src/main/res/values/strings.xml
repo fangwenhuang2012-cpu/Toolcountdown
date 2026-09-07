@@ -44,7 +44,9 @@
     
     <!-- Advanced Settings -->
     <string name="card_settings_title">Cài đặt nâng cao</string>
-    <string name="switch_anti_spam">Chống spam chuông liên tục (Debounce 2s)</string>
+    <string name="switch_anti_spam">Chống spam chuông liên tục</string>
+    <string name="desc_anti_spam">Chỉ đổ chuông 1 lần khi có nhiều tin nhắn gửi dồn dập</string>
+    <string name="label_anti_spam_cooldown">Thời gian giãn cách chống spam:</string>
     <string name="switch_vibrate">Rung khi có tin nhắn</string>
     
     <!-- Setup Guide -->

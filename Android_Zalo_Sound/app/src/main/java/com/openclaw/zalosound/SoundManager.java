@@ -15,11 +15,11 @@ import android.os.VibratorManager;
 import android.util.Log;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class SoundManager {
     private static final String TAG = "ZaloSoundManager";
-    private static final long DEBOUNCE_MS = 1800; // 1.8 seconds anti-spam
 
     private static SoundManager instance;
     private final Context context;
@@ -34,8 +34,10 @@ public class SoundManager {
     private MediaPlayer mediaPlayer;
     private Ringtone currentRingtone;
 
-    private long lastDirectPlayTime = 0;
-    private long lastGroupPlayTime = 0;
+    // Unified Anti-spam / Debounce state
+    private long lastGlobalPlayTime = 0;
+    private final Map<String, Long> lastSenderPlayTimes = new HashMap<>();
+    private final Map<String, Long> recentMessageCache = new HashMap<>();
 
     // Built-in sound indices
     public static final int SOUND_ZALO_CLASSIC = 0;
@@ -87,20 +89,74 @@ public class SoundManager {
     }
 
     /**
+     * Kiểm tra chống spam & trùng lặp thông báo
+     * Trả về true nếu cần CHẶN (debounced), false nếu hợp lệ để phát âm thanh
+     */
+    private synchronized boolean shouldDebounce(String senderName, String messageText) {
+        if (!prefs.isAntiSpamEnabled()) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        long debounceMs = prefs.getAntiSpamSeconds() * 1000L;
+        if (debounceMs < 2000L) {
+            debounceMs = 4000L; // Tối thiểu 4 giây nếu cấu hình không hợp lệ
+        }
+
+        // 1. Kiểm tra thông báo trùng lặp tuyệt đối (Cùng người gửi + cùng nội dung trong vòng 10 giây)
+        String contentKey = (senderName != null ? senderName.trim() : "") + "||" + (messageText != null ? messageText.trim() : "");
+        if (!contentKey.equals("||")) {
+            Long lastContentTime = recentMessageCache.get(contentKey);
+            if (lastContentTime != null && (now - lastContentTime < 10000L)) {
+                Log.d(TAG, "Anti-spam: Duplicate notification content ignored -> " + contentKey);
+                return true;
+            }
+            recentMessageCache.put(contentKey, now);
+        }
+
+        // Dọn dẹp cache nếu danh sách quá lớn
+        if (recentMessageCache.size() > 50) {
+            Iterator<Map.Entry<String, Long>> it = recentMessageCache.entrySet().iterator();
+            while (it.hasNext()) {
+                if (now - it.next().getValue() > 30000L) {
+                    it.remove();
+                }
+            }
+        }
+
+        // 2. Chặn toàn cục (Global Debounce) - Bất kỳ âm thanh nào đã phát trong khoảng debounceMs đều chặn
+        if (now - lastGlobalPlayTime < debounceMs) {
+            Log.d(TAG, "Anti-spam: Global debounced (elapsed " + (now - lastGlobalPlayTime) + "ms < " + debounceMs + "ms).");
+            return true;
+        }
+
+        // 3. Chặn theo người gửi cụ thể (Per-sender Debounce)
+        if (senderName != null && !senderName.trim().isEmpty()) {
+            String cleanSender = senderName.trim().toLowerCase();
+            Long lastSenderTime = lastSenderPlayTimes.get(cleanSender);
+            if (lastSenderTime != null && (now - lastSenderTime < debounceMs)) {
+                Log.d(TAG, "Anti-spam: Debounced consecutive message from sender: " + senderName);
+                return true;
+            }
+            lastSenderPlayTimes.put(cleanSender, now);
+        }
+
+        lastGlobalPlayTime = now;
+        return false;
+    }
+
+    /**
      * Phát âm thanh cho Tin nhắn Cá nhân (1-1)
      */
-    public synchronized void playDirectMessageSound() {
+    public synchronized void playDirectMessageSound(String sender, String text) {
         if (!prefs.isDirectEnabled()) {
             Log.d(TAG, "Direct sound disabled in settings.");
             return;
         }
 
-        long now = System.currentTimeMillis();
-        if (prefs.isAntiSpamEnabled() && (now - lastDirectPlayTime < DEBOUNCE_MS)) {
-            Log.d(TAG, "Anti-spam debounced direct message sound.");
+        if (shouldDebounce(sender, text)) {
             return;
         }
-        lastDirectPlayTime = now;
 
         int soundIndex = prefs.getDirectSoundIndex();
         String customUri = prefs.getDirectCustomUri();
@@ -109,19 +165,48 @@ public class SoundManager {
         triggerVibrateIfEnabled();
     }
 
+    public synchronized void playDirectMessageSound() {
+        playDirectMessageSound("", "");
+    }
+
     /**
      * Phát âm thanh riêng cho Contact VIP cụ thể
      */
-    public synchronized void playContactSound(int soundIndex, String customUri) {
-        long now = System.currentTimeMillis();
-        if (prefs.isAntiSpamEnabled() && (now - lastDirectPlayTime < DEBOUNCE_MS)) {
-            Log.d(TAG, "Anti-spam debounced VIP contact message sound.");
+    public synchronized void playContactSound(int soundIndex, String customUri, String sender, String text) {
+        if (shouldDebounce(sender, text)) {
             return;
         }
-        lastDirectPlayTime = now;
 
         playSound(soundIndex, customUri);
         triggerVibrateIfEnabled();
+    }
+
+    public synchronized void playContactSound(int soundIndex, String customUri) {
+        playContactSound(soundIndex, customUri, "", "");
+    }
+
+    /**
+     * Phát âm thanh cho Tin nhắn Nhóm (Group)
+     */
+    public synchronized void playGroupMessageSound(String groupTitle, String text) {
+        if (!prefs.isGroupEnabled()) {
+            Log.d(TAG, "Group sound disabled in settings.");
+            return;
+        }
+
+        if (shouldDebounce(groupTitle, text)) {
+            return;
+        }
+
+        int soundIndex = prefs.getGroupSoundIndex();
+        String customUri = prefs.getGroupCustomUri();
+
+        playSound(soundIndex, customUri);
+        triggerVibrateIfEnabled();
+    }
+
+    public synchronized void playGroupMessageSound() {
+        playGroupMessageSound("", "");
     }
 
     /**
@@ -144,29 +229,6 @@ public class SoundManager {
             default:
                 return context.getString(R.string.sound_builtin_zalo);
         }
-    }
-
-    /**
-     * Phát âm thanh cho Tin nhắn Nhóm (Group)
-     */
-    public synchronized void playGroupMessageSound() {
-        if (!prefs.isGroupEnabled()) {
-            Log.d(TAG, "Group sound disabled in settings.");
-            return;
-        }
-
-        long now = System.currentTimeMillis();
-        if (prefs.isAntiSpamEnabled() && (now - lastGroupPlayTime < DEBOUNCE_MS)) {
-            Log.d(TAG, "Anti-spam debounced group message sound.");
-            return;
-        }
-        lastGroupPlayTime = now;
-
-        int soundIndex = prefs.getGroupSoundIndex();
-        String customUri = prefs.getGroupCustomUri();
-
-        playSound(soundIndex, customUri);
-        triggerVibrateIfEnabled();
     }
 
     /**
@@ -297,6 +359,9 @@ public class SoundManager {
             }
             currentRingtone = null;
 
+        } catch (Exception ignored) {}
+
+        try {
             if (mediaPlayer != null) {
                 if (mediaPlayer.isPlaying()) {
                     mediaPlayer.stop();

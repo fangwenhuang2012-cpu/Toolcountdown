@@ -16,6 +16,7 @@ public class PrefsHelper {
     private static final String KEY_GROUP_CUSTOM_URI = "key_group_custom_uri";
 
     private static final String KEY_ANTI_SPAM_ENABLED = "key_anti_spam_enabled";
+    private static final String KEY_ANTI_SPAM_SECONDS = "key_anti_spam_seconds";
     private static final String KEY_VIBRATE_ENABLED = "key_vibrate_enabled";
     private static final String KEY_CONTACT_RULES = "key_contact_rules_json";
 
@@ -79,6 +80,14 @@ public class PrefsHelper {
 
     public void setAntiSpamEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_ANTI_SPAM_ENABLED, enabled).apply();
+    }
+
+    public int getAntiSpamSeconds() {
+        return prefs.getInt(KEY_ANTI_SPAM_SECONDS, 4); // Mặc định 4 giây
+    }
+
+    public void setAntiSpamSeconds(int seconds) {
+        prefs.edit().putInt(KEY_ANTI_SPAM_SECONDS, seconds).apply();
     }
 
     public boolean isVibrateEnabled() {

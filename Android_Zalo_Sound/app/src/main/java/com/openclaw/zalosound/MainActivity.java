@@ -57,6 +57,8 @@ public class MainActivity extends AppCompatActivity {
     private Button btnPickGroupCustom;
 
     private SwitchCompat switchAntiSpam;
+    private LinearLayout layoutAntiSpamOptions;
+    private Spinner spinnerAntiSpamDuration;
     private SwitchCompat switchVibrate;
     private Button btnOpenZaloSettings;
 
@@ -159,6 +161,8 @@ public class MainActivity extends AppCompatActivity {
         btnPickGroupCustom = findViewById(R.id.btnPickGroupCustom);
 
         switchAntiSpam = findViewById(R.id.switchAntiSpam);
+        layoutAntiSpamOptions = findViewById(R.id.layoutAntiSpamOptions);
+        spinnerAntiSpamDuration = findViewById(R.id.spinnerAntiSpamDuration);
         switchVibrate = findViewById(R.id.switchVibrate);
         btnOpenZaloSettings = findViewById(R.id.btnOpenZaloSettings);
 
@@ -166,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
         switchDirect.setChecked(prefs.isDirectEnabled());
         switchGroup.setChecked(prefs.isGroupEnabled());
         switchAntiSpam.setChecked(prefs.isAntiSpamEnabled());
+        layoutAntiSpamOptions.setVisibility(prefs.isAntiSpamEnabled() ? View.VISIBLE : View.GONE);
         switchVibrate.setChecked(prefs.isVibrateEnabled());
     }
 
@@ -196,6 +201,27 @@ public class MainActivity extends AppCompatActivity {
         int groupIdx = prefs.getGroupSoundIndex();
         if (groupIdx >= 0 && groupIdx < soundOptions.size()) {
             spinnerGroupSound.setSelection(groupIdx);
+        }
+
+        // Setup Anti-spam Duration Spinner
+        List<String> durationOptions = new ArrayList<>();
+        durationOptions.add("2 giây");
+        durationOptions.add("4 giây (Khuyên dùng)");
+        durationOptions.add("6 giây");
+        durationOptions.add("10 giây");
+
+        ArrayAdapter<String> durationAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, durationOptions);
+        spinnerAntiSpamDuration.setAdapter(durationAdapter);
+
+        int currentSec = prefs.getAntiSpamSeconds();
+        if (currentSec == 2) {
+            spinnerAntiSpamDuration.setSelection(0);
+        } else if (currentSec == 6) {
+            spinnerAntiSpamDuration.setSelection(2);
+        } else if (currentSec == 10) {
+            spinnerAntiSpamDuration.setSelection(3);
+        } else {
+            spinnerAntiSpamDuration.setSelection(1); // 4s
         }
     }
 
@@ -264,7 +290,29 @@ public class MainActivity extends AppCompatActivity {
         btnPickGroupCustom.setOnClickListener(v -> pickCustomRingtone(2));
 
         // Advanced Switches
-        switchAntiSpam.setOnCheckedChangeListener((buttonView, isChecked) -> prefs.setAntiSpamEnabled(isChecked));
+        switchAntiSpam.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.setAntiSpamEnabled(isChecked);
+            layoutAntiSpamOptions.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+        });
+
+        spinnerAntiSpamDuration.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                int sec;
+                switch (position) {
+                    case 0: sec = 2; break;
+                    case 2: sec = 6; break;
+                    case 3: sec = 10; break;
+                    case 1:
+                    default: sec = 4; break;
+                }
+                prefs.setAntiSpamSeconds(sec);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
         switchVibrate.setOnCheckedChangeListener((buttonView, isChecked) -> prefs.setVibrateEnabled(isChecked));
 
         // Zalo System Settings button
