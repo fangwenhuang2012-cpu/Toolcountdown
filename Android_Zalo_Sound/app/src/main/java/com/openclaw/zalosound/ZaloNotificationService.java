@@ -7,11 +7,13 @@ import android.util.Log;
 public class ZaloNotificationService extends NotificationListenerService {
     private static final String TAG = "ZaloNotifService";
     private SoundManager soundManager;
+    private PrefsHelper prefs;
 
     @Override
     public void onCreate() {
         super.onCreate();
         soundManager = SoundManager.getInstance(this);
+        prefs = new PrefsHelper(this);
         Log.i(TAG, "ZaloNotificationService started and ready.");
     }
 
@@ -19,12 +21,19 @@ public class ZaloNotificationService extends NotificationListenerService {
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null) return;
 
-        NotificationClassifier.MessageType type = NotificationClassifier.classify(sbn);
+        NotificationClassifier.ClassificationResult result = NotificationClassifier.classify(sbn);
 
-        switch (type) {
+        switch (result.getType()) {
             case DIRECT_1_1:
-                Log.i(TAG, ">>> [ZALO 1-1 MESSAGE] Triggering Direct Sound.");
-                soundManager.playDirectMessageSound();
+                String senderName = result.getSenderName();
+                ContactRule rule = prefs.findMatchingRule(senderName);
+                if (rule != null && rule.isEnabled()) {
+                    Log.i(TAG, ">>> [ZALO VIP CONTACT MATCHED: " + senderName + "] Playing VIP custom sound index: " + rule.getSoundIndex());
+                    soundManager.playContactSound(rule.getSoundIndex(), rule.getCustomUri());
+                } else {
+                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderName + "] Playing default direct sound.");
+                    soundManager.playDirectMessageSound();
+                }
                 break;
 
             case GROUP:

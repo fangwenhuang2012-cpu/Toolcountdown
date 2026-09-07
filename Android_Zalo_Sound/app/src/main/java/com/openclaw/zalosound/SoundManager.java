@@ -110,6 +110,43 @@ public class SoundManager {
     }
 
     /**
+     * Phát âm thanh riêng cho Contact VIP cụ thể
+     */
+    public synchronized void playContactSound(int soundIndex, String customUri) {
+        long now = System.currentTimeMillis();
+        if (prefs.isAntiSpamEnabled() && (now - lastDirectPlayTime < DEBOUNCE_MS)) {
+            Log.d(TAG, "Anti-spam debounced VIP contact message sound.");
+            return;
+        }
+        lastDirectPlayTime = now;
+
+        playSound(soundIndex, customUri);
+        triggerVibrateIfEnabled();
+    }
+
+    /**
+     * Lấy tên hiển thị của âm thanh
+     */
+    public String getSoundDisplayName(int soundIndex, String customName) {
+        switch (soundIndex) {
+            case SOUND_ZALO_CLASSIC:
+                return context.getString(R.string.sound_builtin_zalo);
+            case SOUND_TING_MODERN:
+                return context.getString(R.string.sound_builtin_ting);
+            case SOUND_DING_SOFT:
+                return context.getString(R.string.sound_builtin_iphone);
+            case SOUND_POP:
+                return context.getString(R.string.sound_builtin_pop);
+            case SOUND_MUTE:
+                return context.getString(R.string.sound_builtin_mute);
+            case SOUND_CUSTOM_FILE:
+                return (customName != null && !customName.trim().isEmpty()) ? customName : context.getString(R.string.sound_custom_device);
+            default:
+                return context.getString(R.string.sound_builtin_zalo);
+        }
+    }
+
+    /**
      * Phát âm thanh cho Tin nhắn Nhóm (Group)
      */
     public synchronized void playGroupMessageSound() {

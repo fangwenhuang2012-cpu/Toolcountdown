@@ -17,6 +17,7 @@ public class PrefsHelper {
 
     private static final String KEY_ANTI_SPAM_ENABLED = "key_anti_spam_enabled";
     private static final String KEY_VIBRATE_ENABLED = "key_vibrate_enabled";
+    private static final String KEY_CONTACT_RULES = "key_contact_rules_json";
 
     private final SharedPreferences prefs;
 
@@ -86,5 +87,85 @@ public class PrefsHelper {
 
     public void setVibrateEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_VIBRATE_ENABLED, enabled).apply();
+    }
+
+    // ==================== VIP CONTACT RULES ====================
+
+    public java.util.List<ContactRule> getContactRules() {
+        java.util.List<ContactRule> list = new java.util.ArrayList<>();
+        String jsonStr = prefs.getString(KEY_CONTACT_RULES, "");
+        if (jsonStr == null || jsonStr.trim().isEmpty()) {
+            return list;
+        }
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(jsonStr);
+            for (int i = 0; i < array.length(); i++) {
+                org.json.JSONObject obj = array.optJSONObject(i);
+                if (obj != null) {
+                    ContactRule rule = ContactRule.fromJson(obj);
+                    if (rule != null) {
+                        list.add(rule);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    public void saveContactRules(java.util.List<ContactRule> list) {
+        if (list == null) return;
+        org.json.JSONArray array = new org.json.JSONArray();
+        for (ContactRule rule : list) {
+            if (rule != null) {
+                array.put(rule.toJson());
+            }
+        }
+        prefs.edit().putString(KEY_CONTACT_RULES, array.toString()).apply();
+    }
+
+    public void addOrUpdateContactRule(ContactRule rule) {
+        if (rule == null) return;
+        java.util.List<ContactRule> list = getContactRules();
+        boolean found = false;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getId().equals(rule.getId())) {
+                list.set(i, rule);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            list.add(rule);
+        }
+        saveContactRules(list);
+    }
+
+    public void deleteContactRule(String ruleId) {
+        if (ruleId == null) return;
+        java.util.List<ContactRule> list = getContactRules();
+        java.util.Iterator<ContactRule> it = list.iterator();
+        while (it.hasNext()) {
+            ContactRule rule = it.next();
+            if (ruleId.equals(rule.getId())) {
+                it.remove();
+                break;
+            }
+        }
+        saveContactRules(list);
+    }
+
+    public ContactRule findMatchingRule(String senderName) {
+        if (senderName == null || senderName.trim().isEmpty()) {
+            return null;
+        }
+        java.util.List<ContactRule> list = getContactRules();
+        for (ContactRule rule : list) {
+            if (rule.isEnabled() && rule.matchesSender(senderName)) {
+                return rule;
+            }
+        }
+        return null;
     }
 }

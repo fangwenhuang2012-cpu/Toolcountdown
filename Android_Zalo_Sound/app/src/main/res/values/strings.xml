@@ -20,6 +20,22 @@
     <string name="label_select_sound">Chọn âm thanh:</string>
     <string name="btn_test_1_1">Nghe thử</string>
     
+    <!-- VIP Contact Card -->
+    <string name="card_vip_title">Chuông riêng theo người gửi (VIP Contact)</string>
+    <string name="card_vip_desc">Tự động phát chuông đặc biệt khi nhận tin nhắn từ người cụ thể</string>
+    <string name="btn_add_vip_contact">+ Thêm người liên hệ</string>
+    <string name="empty_vip_contacts">Chưa có cài đặt riêng. Bấm \'+ Thêm người liên hệ\' để đặt chuông đặc biệt cho Sếp, Vợ/Chồng, Khách VIP...</string>
+    <string name="dialog_add_vip_title">Thêm chuông cho người gửi</string>
+    <string name="dialog_edit_vip_title">Chỉnh sửa chuông người gửi</string>
+    <string name="label_contact_name">Tên hiển thị trên Zalo:</string>
+    <string name="hint_contact_name">Ví dụ: Sếp, Vợ yêu, Nguyễn Văn A</string>
+    <string name="btn_save">Lưu</string>
+    <string name="btn_cancel">Hủy</string>
+    <string name="btn_delete">Xóa</string>
+    <string name="toast_empty_contact_name">Vui lòng nhập tên người gửi trên Zalo!</string>
+    <string name="toast_saved_contact_rule">Đã lưu cài đặt chuông riêng!</string>
+    <string name="toast_deleted_contact_rule">Đã xóa cài đặt chuông riêng!</string>
+    
     <!-- Group Message Card -->
     <string name="card_group_title">Tin nhắn Nhóm (Group Chat)</string>
     <string name="card_group_desc">Áp dụng cho mọi nhóm chat Zalo</string>
@@ -34,7 +50,7 @@
     <!-- Setup Guide -->
     <string name="card_guide_title">Hướng dẫn thiết lập Zalo</string>
     <string name="guide_step_1">1. Vào Cài đặt máy > Ứng dụng > Zalo > Thông báo.</string>
-    <string name="guide_step_2">2. Chọn mục Thông báo tin nhắn > Đặt Âm thanh thành "Im lặng" (hoặc Không chuông).</string>
+    <string name="guide_step_2">2. Chọn mục Thông báo tin nhắn > Đặt Âm thanh thành \"Im lặng\" (hoặc Không chuông).</string>
     <string name="guide_step_3">3. Bật ứng dụng này lên để tự động phát chuông chuẩn theo loại tin nhắn!</string>
     <string name="btn_open_zalo_settings">Mở cài đặt thông báo Zalo</string>
     

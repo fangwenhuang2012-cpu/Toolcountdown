@@ -10,16 +10,20 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.cardview.widget.CardView;
@@ -42,6 +46,11 @@ public class MainActivity extends AppCompatActivity {
     private Button btnTestDirectSound;
     private Button btnPickDirectCustom;
 
+    // VIP Contacts UI
+    private TextView tvVipEmptyState;
+    private LinearLayout containerVipContacts;
+    private Button btnAddVipContact;
+
     private SwitchCompat switchGroup;
     private Spinner spinnerGroupSound;
     private Button btnTestGroupSound;
@@ -53,6 +62,13 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isDirectCustomPending = false;
     private boolean isGroupCustomPending = false;
+    private boolean isContactCustomPending = false;
+
+    // Dialog state holders for custom audio picker
+    private Spinner currentDialogSpinner = null;
+    private TextView currentDialogTvCustom = null;
+    private String currentDialogCustomUri = "";
+    private String currentDialogCustomSoundName = "";
 
     private final ActivityResultLauncher<Intent> ringtonePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -74,11 +90,32 @@ public class MainActivity extends AppCompatActivity {
                             prefs.setGroupSoundIndex(SoundManager.SOUND_CUSTOM_FILE);
                             spinnerGroupSound.setSelection(SoundManager.SOUND_CUSTOM_FILE);
                             Toast.makeText(this, "Đã chọn chuông Nhóm từ máy!", Toast.LENGTH_SHORT).show();
+                        } else if (isContactCustomPending) {
+                            currentDialogCustomUri = uriString;
+                            try {
+                                Ringtone r = RingtoneManager.getRingtone(this, uri);
+                                if (r != null) {
+                                    currentDialogCustomSoundName = r.getTitle(this);
+                                } else {
+                                    currentDialogCustomSoundName = uri.getLastPathSegment();
+                                }
+                            } catch (Exception e) {
+                                currentDialogCustomSoundName = "File âm thanh";
+                            }
+                            if (currentDialogSpinner != null) {
+                                currentDialogSpinner.setSelection(SoundManager.SOUND_CUSTOM_FILE);
+                            }
+                            if (currentDialogTvCustom != null) {
+                                currentDialogTvCustom.setText("File: " + currentDialogCustomSoundName);
+                                currentDialogTvCustom.setVisibility(View.VISIBLE);
+                            }
+                            Toast.makeText(this, "Đã chọn chuông cho người này!", Toast.LENGTH_SHORT).show();
                         }
                     }
                 }
                 isDirectCustomPending = false;
                 isGroupCustomPending = false;
+                isContactCustomPending = false;
             }
     );
 
@@ -93,6 +130,7 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupSoundSpinners();
         setupListeners();
+        renderVipContacts();
     }
 
     @Override
@@ -111,6 +149,10 @@ public class MainActivity extends AppCompatActivity {
         btnTestDirectSound = findViewById(R.id.btnTestDirectSound);
         btnPickDirectCustom = findViewById(R.id.btnPickDirectCustom);
 
+        tvVipEmptyState = findViewById(R.id.tvVipEmptyState);
+        containerVipContacts = findViewById(R.id.containerVipContacts);
+        btnAddVipContact = findViewById(R.id.btnAddVipContact);
+
         switchGroup = findViewById(R.id.switchGroup);
         spinnerGroupSound = findViewById(R.id.spinnerGroupSound);
         btnTestGroupSound = findViewById(R.id.btnTestGroupSound);
@@ -127,7 +169,7 @@ public class MainActivity extends AppCompatActivity {
         switchVibrate.setChecked(prefs.isVibrateEnabled());
     }
 
-    private void setupSoundSpinners() {
+    private List<String> getSoundOptionsList() {
         List<String> soundOptions = new ArrayList<>();
         soundOptions.add(getString(R.string.sound_builtin_zalo));
         soundOptions.add(getString(R.string.sound_builtin_ting));
@@ -135,6 +177,11 @@ public class MainActivity extends AppCompatActivity {
         soundOptions.add(getString(R.string.sound_builtin_pop));
         soundOptions.add(getString(R.string.sound_builtin_mute));
         soundOptions.add(getString(R.string.sound_custom_device));
+        return soundOptions;
+    }
+
+    private void setupSoundSpinners() {
+        List<String> soundOptions = getSoundOptionsList();
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, soundOptions);
 
@@ -167,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position == SoundManager.SOUND_CUSTOM_FILE && TextUtils.isEmpty(prefs.getDirectCustomUri())) {
-                    pickCustomRingtone(true);
+                    pickCustomRingtone(1);
                 } else {
                     prefs.setDirectSoundIndex(position);
                 }
@@ -182,7 +229,10 @@ public class MainActivity extends AppCompatActivity {
             soundManager.testSound(selected, prefs.getDirectCustomUri());
         });
 
-        btnPickDirectCustom.setOnClickListener(v -> pickCustomRingtone(true));
+        btnPickDirectCustom.setOnClickListener(v -> pickCustomRingtone(1));
+
+        // VIP Contacts Controls
+        btnAddVipContact.setOnClickListener(v -> showContactRuleDialog(null));
 
         // Group Controls
         switchGroup.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -196,7 +246,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position == SoundManager.SOUND_CUSTOM_FILE && TextUtils.isEmpty(prefs.getGroupCustomUri())) {
-                    pickCustomRingtone(false);
+                    pickCustomRingtone(2);
                 } else {
                     prefs.setGroupSoundIndex(position);
                 }
@@ -211,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
             soundManager.testSound(selected, prefs.getGroupCustomUri());
         });
 
-        btnPickGroupCustom.setOnClickListener(v -> pickCustomRingtone(false));
+        btnPickGroupCustom.setOnClickListener(v -> pickCustomRingtone(2));
 
         // Advanced Switches
         switchAntiSpam.setOnCheckedChangeListener((buttonView, isChecked) -> prefs.setAntiSpamEnabled(isChecked));
@@ -220,6 +270,160 @@ public class MainActivity extends AppCompatActivity {
         // Zalo System Settings button
         btnOpenZaloSettings.setOnClickListener(v -> openZaloSystemSettings());
     }
+
+    // ==================== VIP CONTACTS MANAGEMENT ====================
+
+    private void renderVipContacts() {
+        List<ContactRule> rules = prefs.getContactRules();
+        containerVipContacts.removeAllViews();
+
+        if (rules.isEmpty()) {
+            tvVipEmptyState.setVisibility(View.VISIBLE);
+        } else {
+            tvVipEmptyState.setVisibility(View.GONE);
+            LayoutInflater inflater = LayoutInflater.from(this);
+
+            for (ContactRule rule : rules) {
+                View itemView = inflater.inflate(R.layout.item_contact_rule, containerVipContacts, false);
+
+                TextView tvItemContactName = itemView.findViewById(R.id.tvItemContactName);
+                TextView tvItemSoundName = itemView.findViewById(R.id.tvItemSoundName);
+                SwitchCompat switchItemEnable = itemView.findViewById(R.id.switchItemEnable);
+                Button btnItemTestSound = itemView.findViewById(R.id.btnItemTestSound);
+                Button btnItemEdit = itemView.findViewById(R.id.btnItemEdit);
+                Button btnItemDelete = itemView.findViewById(R.id.btnItemDelete);
+
+                tvItemContactName.setText(rule.getContactName());
+                String soundName = soundManager.getSoundDisplayName(rule.getSoundIndex(), rule.getCustomSoundName());
+                tvItemSoundName.setText("Chuông: " + soundName);
+
+                switchItemEnable.setChecked(rule.isEnabled());
+                switchItemEnable.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                    rule.setEnabled(isChecked);
+                    prefs.addOrUpdateContactRule(rule);
+                });
+
+                btnItemTestSound.setOnClickListener(v -> soundManager.testSound(rule.getSoundIndex(), rule.getCustomUri()));
+
+                btnItemEdit.setOnClickListener(v -> showContactRuleDialog(rule));
+
+                btnItemDelete.setOnClickListener(v -> {
+                    new AlertDialog.Builder(this)
+                            .setTitle("Xóa chuông liên hệ")
+                            .setMessage("Bạn có chắc chắn muốn xóa cài đặt chuông cho '" + rule.getContactName() + "'?")
+                            .setPositiveButton("Xóa", (dialog, which) -> {
+                                prefs.deleteContactRule(rule.getId());
+                                renderVipContacts();
+                                Toast.makeText(this, R.string.toast_deleted_contact_rule, Toast.LENGTH_SHORT).show();
+                            })
+                            .setNegativeButton("Hủy", null)
+                            .show();
+                });
+
+                containerVipContacts.addView(itemView);
+            }
+        }
+    }
+
+    private void showContactRuleDialog(ContactRule existingRule) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_contact_rule, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        TextView tvDialogTitle = dialogView.findViewById(R.id.tvDialogTitle);
+        EditText etContactName = dialogView.findViewById(R.id.etContactName);
+        Spinner spinnerDialogSound = dialogView.findViewById(R.id.spinnerDialogSound);
+        TextView tvDialogCustomFileName = dialogView.findViewById(R.id.tvDialogCustomFileName);
+        Button btnDialogTestSound = dialogView.findViewById(R.id.btnDialogTestSound);
+        Button btnDialogPickCustom = dialogView.findViewById(R.id.btnDialogPickCustom);
+        Button btnDialogCancel = dialogView.findViewById(R.id.btnDialogCancel);
+        Button btnDialogSave = dialogView.findViewById(R.id.btnDialogSave);
+
+        // Setup Spinner
+        List<String> soundOptions = getSoundOptionsList();
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, soundOptions);
+        spinnerDialogSound.setAdapter(adapter);
+
+        currentDialogSpinner = spinnerDialogSound;
+        currentDialogTvCustom = tvDialogCustomFileName;
+
+        if (existingRule != null) {
+            tvDialogTitle.setText(R.string.dialog_edit_vip_title);
+            etContactName.setText(existingRule.getContactName());
+            currentDialogCustomUri = existingRule.getCustomUri();
+            currentDialogCustomSoundName = existingRule.getCustomSoundName();
+
+            int soundIdx = existingRule.getSoundIndex();
+            if (soundIdx >= 0 && soundIdx < soundOptions.size()) {
+                spinnerDialogSound.setSelection(soundIdx);
+            }
+            if (soundIdx == SoundManager.SOUND_CUSTOM_FILE && !TextUtils.isEmpty(currentDialogCustomSoundName)) {
+                tvDialogCustomFileName.setText("File: " + currentDialogCustomSoundName);
+                tvDialogCustomFileName.setVisibility(View.VISIBLE);
+            }
+        } else {
+            tvDialogTitle.setText(R.string.dialog_add_vip_title);
+            currentDialogCustomUri = "";
+            currentDialogCustomSoundName = "";
+            spinnerDialogSound.setSelection(SoundManager.SOUND_DING_SOFT);
+            tvDialogCustomFileName.setVisibility(View.GONE);
+        }
+
+        spinnerDialogSound.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position == SoundManager.SOUND_CUSTOM_FILE && TextUtils.isEmpty(currentDialogCustomUri)) {
+                    pickCustomRingtone(3);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        btnDialogPickCustom.setOnClickListener(v -> pickCustomRingtone(3));
+
+        btnDialogTestSound.setOnClickListener(v -> {
+            int selected = spinnerDialogSound.getSelectedItemPosition();
+            soundManager.testSound(selected, currentDialogCustomUri);
+        });
+
+        btnDialogCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnDialogSave.setOnClickListener(v -> {
+            String contactName = etContactName.getText().toString().trim();
+            if (contactName.isEmpty()) {
+                Toast.makeText(this, R.string.toast_empty_contact_name, Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            int selectedSound = spinnerDialogSound.getSelectedItemPosition();
+            ContactRule ruleToSave;
+            if (existingRule != null) {
+                ruleToSave = existingRule;
+                ruleToSave.setContactName(contactName);
+                ruleToSave.setSoundIndex(selectedSound);
+                ruleToSave.setCustomUri(currentDialogCustomUri);
+                ruleToSave.setCustomSoundName(currentDialogCustomSoundName);
+            } else {
+                ruleToSave = new ContactRule(contactName, selectedSound, currentDialogCustomUri, currentDialogCustomSoundName, true);
+            }
+
+            prefs.addOrUpdateContactRule(ruleToSave);
+            renderVipContacts();
+            Toast.makeText(this, R.string.toast_saved_contact_rule, Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+        });
+
+        dialog.show();
+    }
+
+    // ==================== SYSTEM & HELPER METHODS ====================
 
     private boolean isNotificationServiceEnabled() {
         String pkgName = getPackageName();
@@ -268,20 +472,35 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void pickCustomRingtone(boolean forDirect) {
-        isDirectCustomPending = forDirect;
-        isGroupCustomPending = !forDirect;
+    /**
+     * Mode:
+     * 1: Direct 1-1 custom ringtone
+     * 2: Group custom ringtone
+     * 3: VIP Contact custom ringtone
+     */
+    private void pickCustomRingtone(int mode) {
+        isDirectCustomPending = (mode == 1);
+        isGroupCustomPending = (mode == 2);
+        isContactCustomPending = (mode == 3);
+
+        String title;
+        if (mode == 1) {
+            title = "Chọn chuông tin nhắn 1-1";
+        } else if (mode == 2) {
+            title = "Chọn chuông tin nhắn Nhóm";
+        } else {
+            title = "Chọn chuông riêng cho liên hệ";
+        }
 
         Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
         intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION);
-        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, forDirect ? "Chọn chuông tin nhắn 1-1" : "Chọn chuông tin nhắn Nhóm");
+        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, title);
         intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
         intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
 
         try {
             ringtonePickerLauncher.launch(intent);
         } catch (Exception e) {
-            // Fallback to general audio picker
             Intent audioPicker = new Intent(Intent.ACTION_GET_CONTENT);
             audioPicker.setType("audio/*");
             ringtonePickerLauncher.launch(audioPicker);
