@@ -1,7 +1,10 @@
-name: Build AI VietMap Camera HUD APK (PAUSED)
+name: Build AI VietMap Camera HUD APK
 
 on:
-  # Tắt hoàn toàn tự động kích hoạt khi push để tạm dừng dự án VietMap
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
