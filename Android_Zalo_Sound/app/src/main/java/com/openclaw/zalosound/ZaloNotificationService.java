@@ -22,8 +22,14 @@ public class ZaloNotificationService extends NotificationListenerService {
         if (sbn == null) return;
 
         NotificationClassifier.ClassificationResult result = NotificationClassifier.classify(sbn);
+        if (result.getType() == NotificationClassifier.MessageType.SYSTEM_IGNORE) {
+            return;
+        }
+
         String notifKey = sbn.getKey();
         int notifId = sbn.getId();
+        long notifWhen = sbn.getNotification() != null ? sbn.getNotification().when : 0L;
+        long postTime = sbn.getPostTime();
         String senderOrGroup = result.getSenderName();
         String messageText = result.getMessageText();
 
@@ -31,17 +37,17 @@ public class ZaloNotificationService extends NotificationListenerService {
             case DIRECT_1_1:
                 ContactRule rule = prefs.findMatchingRule(senderOrGroup);
                 if (rule != null && rule.isEnabled()) {
-                    Log.i(TAG, ">>> [ZALO VIP CONTACT: " + senderOrGroup + "] Triggering VIP Sound: " + rule.getSoundIndex() + " (Key: " + notifKey + ")");
-                    soundManager.playContactSound(notifKey, notifId, rule.getSoundIndex(), rule.getCustomUri(), senderOrGroup, messageText);
+                    Log.i(TAG, ">>> [ZALO VIP CONTACT: " + senderOrGroup + "] Triggering VIP Sound: " + rule.getSoundIndex() + " (Key: " + notifKey + ", When: " + notifWhen + ")");
+                    soundManager.playContactSound(notifKey, notifId, notifWhen, postTime, rule.getSoundIndex(), rule.getCustomUri(), senderOrGroup, messageText);
                 } else {
-                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderOrGroup + "] Triggering Default Direct Sound (Key: " + notifKey + ")");
-                    soundManager.playDirectMessageSound(notifKey, notifId, senderOrGroup, messageText);
+                    Log.i(TAG, ">>> [ZALO 1-1 MESSAGE: " + senderOrGroup + "] Triggering Default Direct Sound (Key: " + notifKey + ", When: " + notifWhen + ")");
+                    soundManager.playDirectMessageSound(notifKey, notifId, notifWhen, postTime, senderOrGroup, messageText);
                 }
                 break;
 
             case GROUP:
-                Log.i(TAG, ">>> [ZALO GROUP MESSAGE: " + senderOrGroup + "] Triggering Group Sound (Key: " + notifKey + ")");
-                soundManager.playGroupMessageSound(notifKey, notifId, senderOrGroup, messageText);
+                Log.i(TAG, ">>> [ZALO GROUP MESSAGE: " + senderOrGroup + "] Triggering Group Sound (Key: " + notifKey + ", When: " + notifWhen + ")");
+                soundManager.playGroupMessageSound(notifKey, notifId, notifWhen, postTime, senderOrGroup, messageText);
                 break;
 
             case CALL:

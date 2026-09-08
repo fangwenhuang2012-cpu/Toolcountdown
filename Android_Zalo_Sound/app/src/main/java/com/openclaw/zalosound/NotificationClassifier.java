@@ -92,10 +92,23 @@ public class NotificationClassifier {
             return new ClassificationResult(MessageType.SYSTEM_IGNORE, "", "");
         }
 
-        // 3. Bỏ qua cuộc gọi Zalo
+        // 3. Bỏ qua Foreground Service / Progress notifications
+        if ((notification.flags & Notification.FLAG_FOREGROUND_SERVICE) != 0) {
+            Log.d(TAG, "Ignore: Foreground service notification");
+            return new ClassificationResult(MessageType.SYSTEM_IGNORE, "", "");
+        }
+
+        // 4. Bỏ qua cuộc gọi Zalo
         if (Notification.CATEGORY_CALL.equals(notification.category)) {
             Log.d(TAG, "Ignore: Call category");
             return new ClassificationResult(MessageType.CALL, "", "");
+        }
+
+        if (Notification.CATEGORY_SYSTEM.equals(notification.category) ||
+            Notification.CATEGORY_SERVICE.equals(notification.category) ||
+            Notification.CATEGORY_PROGRESS.equals(notification.category)) {
+            Log.d(TAG, "Ignore: System/Service/Progress category");
+            return new ClassificationResult(MessageType.SYSTEM_IGNORE, "", "");
         }
 
         Bundle extras = notification.extras;
@@ -121,7 +134,8 @@ public class NotificationClassifier {
         // Kiểm tra cuộc gọi qua text
         String fullCombined = (title + " " + text + " " + subText).toLowerCase();
         if (fullCombined.contains("cuộc gọi đến") || fullCombined.contains("cuộc gọi nhỡ") ||
-            fullCombined.contains("cuộc gọi video") || fullCombined.contains("incoming call")) {
+            fullCombined.contains("cuộc gọi video") || fullCombined.contains("incoming call") ||
+            fullCombined.contains("missed call")) {
             Log.d(TAG, "Ignore: Call text detected");
             return new ClassificationResult(MessageType.CALL, title, text, title);
         }
@@ -133,15 +147,75 @@ public class NotificationClassifier {
             fullCombined.contains("khoảnh khắc") || fullCombined.contains("nhật ký") ||
             fullCombined.contains("gợi ý kết bạn") || fullCombined.contains("đăng nhập trên") ||
             fullCombined.contains("zalopay") || fullCombined.contains("ví qr") ||
-            fullCombined.contains("zalo video") || fullCombined.contains("sinh nhật")) {
+            fullCombined.contains("zalo video") || fullCombined.contains("sinh nhật") ||
+            fullCombined.contains("kết bạn mới") || fullCombined.contains("tin nổi bật") ||
+            fullCombined.contains("nhắc nhở") || fullCombined.contains("official account") ||
+            fullCombined.contains("zalo oa")) {
             Log.d(TAG, "Ignore: System/Promotional notice: " + fullCombined);
             return new ClassificationResult(MessageType.SYSTEM_IGNORE, title, text, title);
         }
 
-        // Bỏ qua nếu tiêu đề là "Zalo" và không có nội dung người gửi cụ thể
-        if (title.equalsIgnoreCase("Zalo") && (text.isEmpty() || text.toLowerCase().contains("tin nhắn mới"))) {
-            Log.d(TAG, "Ignore: Generic Zalo header notification");
+        // Bỏ qua Android notification bundle summary (danh sách nhiều dòng từ nhiều chat)
+        CharSequence[] textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
+        if (textLines != null && textLines.length > 1) {
+            String lowerTitle = title.toLowerCase();
+            if (lowerTitle.equals("zalo") || lowerTitle.contains("cuộc trò chuyện") || lowerTitle.contains("tin nhắn")) {
+                Log.d(TAG, "Ignore: Multi-line inbox summary bundle");
+                return new ClassificationResult(MessageType.SYSTEM_IGNORE, title, text, title);
+            }
+        }
+
+        // Trích xuất thông tin người gửi/nội dung từ MessagingStyle nếu có
+        Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+        String messagingSender = "";
+        String messagingText = "";
+        if (messages != null && messages.length > 0) {
+            Parcelable lastMsg = messages[messages.length - 1];
+            if (lastMsg instanceof Bundle) {
+                Bundle msgBundle = (Bundle) lastMsg;
+                CharSequence senderPerson = msgBundle.getCharSequence("sender");
+                CharSequence msgContent = msgBundle.getCharSequence("text");
+                if (senderPerson != null && !TextUtils.isEmpty(senderPerson)) {
+                    messagingSender = senderPerson.toString().trim();
+                }
+                if (msgContent != null && !TextUtils.isEmpty(msgContent)) {
+                    messagingText = msgContent.toString().trim();
+                }
+            }
+        }
+
+        // Bỏ qua tiêu đề placeholder generic như "Zalo", "Tin nhắn mới", "Thông báo mới" nếu không có tin nhắn cụ thể
+        String lowerTitle = title.toLowerCase();
+        String lowerText = text.toLowerCase();
+        boolean isGenericTitle = title.isEmpty() || lowerTitle.equals("zalo") || lowerTitle.equals("com.zing.zalo") ||
+                lowerTitle.equals("zalo chat") || lowerTitle.equals("tin nhắn mới") || lowerTitle.equals("thông báo mới");
+
+        if (isGenericTitle) {
+            if (!messagingSender.isEmpty() && !messagingSender.equalsIgnoreCase("zalo")) {
+                // Sử dụng sender từ MessagingStyle
+                title = messagingSender;
+                if (!messagingText.isEmpty()) {
+                    text = messagingText;
+                }
+            } else {
+                Log.d(TAG, "Ignore: Generic Zalo header notification without sender (Title: " + title + ", Text: " + text + ")");
+                return new ClassificationResult(MessageType.SYSTEM_IGNORE, title, text, title);
+            }
+        }
+
+        // Bỏ qua nếu text là nội dung tạm thời/placeholder trước khi tải xong
+        if (lowerText.equals("bạn có tin nhắn mới") || lowerText.equals("có tin nhắn mới") ||
+            lowerText.equals("tin nhắn mới") || lowerText.equals("đang nhận tin nhắn...") ||
+            lowerText.equals("đang kiểm tra tin nhắn...") || lowerText.equals("bạn có thông báo mới") ||
+            lowerText.equals("đang nhận...") || lowerText.equals("đang tải...") ||
+            (lowerText.contains("tin nhắn mới") && lowerText.contains("cuộc trò chuyện"))) {
+            Log.d(TAG, "Ignore: Placeholder text message: " + text);
             return new ClassificationResult(MessageType.SYSTEM_IGNORE, title, text, title);
+        }
+
+        // Bỏ qua nếu rỗng hoàn toàn cả tiêu đề và nội dung
+        if (title.isEmpty() && text.isEmpty()) {
+            return new ClassificationResult(MessageType.SYSTEM_IGNORE, "", "");
         }
 
         // ==================== NHẬN DIỆN TIN NHẮN NHÓM (GROUP DETECTION) ====================
@@ -168,22 +242,9 @@ public class NotificationClassifier {
         }
 
         // 4.4 Kiểm tra qua MessagingStyle messages bundle array
-        Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
-        if (messages != null && messages.length > 0) {
-            for (Parcelable msgParcel : messages) {
-                if (msgParcel instanceof Bundle) {
-                    Bundle msgBundle = (Bundle) msgParcel;
-                    CharSequence senderPerson = msgBundle.getCharSequence("sender");
-                    if (senderPerson != null && !TextUtils.isEmpty(senderPerson)) {
-                        String senderStr = senderPerson.toString().trim();
-                        // Nếu sender khác với title và title không rỗng -> title chính là tên nhóm
-                        if (!senderStr.equalsIgnoreCase(title) && !title.isEmpty()) {
-                            Log.d(TAG, "Classified as GROUP via MessagingStyle sender!=title (" + senderStr + " in " + title + ")");
-                            return new ClassificationResult(MessageType.GROUP, title, text, title);
-                        }
-                    }
-                }
-            }
+        if (!messagingSender.isEmpty() && !title.isEmpty() && !messagingSender.equalsIgnoreCase(title)) {
+            Log.d(TAG, "Classified as GROUP via MessagingStyle sender!=title (" + messagingSender + " in " + title + ")");
+            return new ClassificationResult(MessageType.GROUP, title, text, title);
         }
 
         // 4.5 Phân tích SubText, InfoText, SummaryText (Zalo thường gán tên nhóm ở đây)
@@ -235,8 +296,7 @@ public class NotificationClassifier {
             return new ClassificationResult(MessageType.GROUP, title, text, title);
         }
 
-        // 4.8 Kiểm tra text lines nếu có nhiều dòng từ nhiều người
-        CharSequence[] textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
+        // 4.8 Kiểm tra text lines nếu có tiền tố thành viên
         if (textLines != null && textLines.length > 0) {
             for (CharSequence line : textLines) {
                 if (line != null && PATTERN_MEMBER_PREFIX.matcher(line.toString().trim()).find()) {
@@ -247,7 +307,7 @@ public class NotificationClassifier {
         }
 
         // ==================== TIN NHẮN CÁ NHÂN (1-1) ====================
-        if (!title.isEmpty() || !text.isEmpty()) {
+        if (!title.isEmpty()) {
             Log.d(TAG, "Classified as DIRECT_1_1. Sender: " + title + " | Text: " + text);
             return new ClassificationResult(MessageType.DIRECT_1_1, title, text, title);
         }
