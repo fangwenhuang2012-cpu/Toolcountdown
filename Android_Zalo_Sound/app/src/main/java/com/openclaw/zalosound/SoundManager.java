@@ -48,20 +48,28 @@ public class SoundManager {
         }
     }
 
-    // 1. Khoảng cách thời gian tối thiểu giữa 2 lần phát âm thanh toàn cục (2.2s)
-    private static final long MIN_AUDIO_PLAY_INTERVAL_MS = 2200L;
+    // 1. Khoảng cách thời gian tối thiểu giữa 2 lần phát âm thanh toàn cục (2.5s)
+    private static final long MIN_AUDIO_PLAY_INTERVAL_MS = 2500L;
     private long lastAudioPlayTimestamp = 0;
 
-    // 2. Cache lưu Notification Key / ID kèm timestamp & notifWhen (Cửa sổ 8 giây)
-    private static final long KEY_DEDUPLICATION_WINDOW_MS = 8000L;
+    // 2. Global notifWhen timestamp cache (15 giây) - Bắt trọn vẹn mọi notification cập nhật/summary/push/sync
+    private static final long NOTIF_WHEN_WINDOW_MS = 15000L;
+    private final Map<Long, Long> recentNotifWhenCache = new HashMap<>();
+
+    // 3. Global Text-Only content cache (3.5 giây) - Ngăn trùng nội dung tin nhắn xuyên suốt giữa các sự kiện
+    private static final long TEXT_CONTENT_WINDOW_MS = 3500L;
+    private final Map<String, Long> recentTextOnlyCache = new HashMap<>();
+
+    // 4. Cache lưu Notification Key / ID kèm timestamp & notifWhen (Cửa sổ 10 giây)
+    private static final long KEY_DEDUPLICATION_WINDOW_MS = 10000L;
     private final Map<String, KeyRecord> recentNotifKeyCache = new HashMap<>();
 
-    // 3. Cache lưu Fingerprint nội dung (Người gửi + Nội dung chuẩn hóa) (Cửa sổ 10 giây)
-    private static final long FINGERPRINT_WINDOW_MS = 10000L;
+    // 5. Cache lưu Fingerprint nội dung (Người gửi/nhóm đã chuẩn hóa + Nội dung chuẩn hóa) (Cửa sổ 12 giây)
+    private static final long FINGERPRINT_WINDOW_MS = 12000L;
     private final Map<String, Long> recentFingerprintCache = new HashMap<>();
 
-    // 4. Cache lưu thời điểm phát theo từng người gửi (Hard Anti-Bounce 2.5s tối thiểu hoặc theo Anti-Spam cấu hình)
-    private static final long MIN_SENDER_COOLDOWN_MS = 2500L;
+    // 6. Cache lưu thời điểm phát theo từng người gửi/nhóm (Tối thiểu 2.8s hoặc theo Anti-Spam cấu hình)
+    private static final long MIN_SENDER_COOLDOWN_MS = 2800L;
     private final Map<String, Long> lastSenderSpamTimes = new HashMap<>();
 
     // Built-in sound indices
@@ -114,28 +122,42 @@ public class SoundManager {
     }
 
     /**
-     * Bộ lọc chống trùng lặp (Deduplication) và chống spam dồn dập (Anti-Spam) 4 tầng hoàn hảo.
+     * Bộ lọc chống trùng lặp (Deduplication) và chống spam dồn dập (Anti-Spam) 6 tầng hoàn hảo.
      * @return true nếu CẦN CHẶN (bỏ qua), false nếu HỢP LỆ để phát âm thanh
      */
     public synchronized boolean shouldDebounce(String notifKey, int notifId, long notifWhen, long postTime, String senderOrGroup, String messageText) {
         long now = System.currentTimeMillis();
 
         String keyIdentifier = (notifKey != null && !notifKey.trim().isEmpty()) ? notifKey.trim() : ("id_" + notifId);
-        String cleanSender = senderOrGroup != null ? senderOrGroup.trim().toLowerCase() : "";
+        String cleanSender = NotificationClassifier.cleanSenderOrGroupName(senderOrGroup).toLowerCase();
         String cleanText = NotificationClassifier.cleanMessageContent(messageText).toLowerCase();
         String fingerprint = cleanSender + "||" + cleanText;
 
         // ----------------------------------------------------
-        // TẦNG 1: LỌC TRÙNG LẶP NOTIFICATION KEY & NOTIF WHEN (8 GIÂY)
-        // Bắt trọn vẹn hiện tượng Zalo/Android cập nhật avatar, badge, actions gây bắn lại event
+        // TẦNG 0: LỌC THEO NOTIFICATION 'WHEN' TIMESTAMP TOÀN CỤC (15 GIÂY)
+        // Khi Zalo bắn Push -> Sync -> Summary -> Badge update, mốc thời gian tin nhắn (when) là DUY NHẤT.
+        // Kiểm tra này bắt 100% duplicate bất kể thay đổi notification key, ID hay sender tag.
+        // ----------------------------------------------------
+        if (notifWhen > 0) {
+            Long lastWhenSeen = recentNotifWhenCache.get(notifWhen);
+            if (lastWhenSeen != null && (now - lastWhenSeen < NOTIF_WHEN_WINDOW_MS)) {
+                Log.d(TAG, "Debounced [Tier 0 - Global When]: Duplicate message timestamp " + notifWhen + " (elapsed: " + (now - lastWhenSeen) + "ms)");
+                recentNotifWhenCache.put(notifWhen, now);
+                return true;
+            }
+            recentNotifWhenCache.put(notifWhen, now);
+        }
+
+        // ----------------------------------------------------
+        // TẦNG 1: LỌC TRÙNG LẶP NOTIFICATION KEY & ID (10 GIÂY)
+        // Bắt các update trên cùng 1 notification channel/id
         // ----------------------------------------------------
         KeyRecord prevKey = recentNotifKeyCache.get(keyIdentifier);
         if (prevKey != null) {
             long elapsed = now - prevKey.timestamp;
             if (elapsed < KEY_DEDUPLICATION_WINDOW_MS) {
-                // Nếu cùng notifWhen (mốc thời gian tin nhắn Zalo gán) HOẶC cách nhau dưới 2.5s HOẶC cùng nội dung
-                if ((notifWhen > 0 && notifWhen == prevKey.notifWhen) || elapsed < 2500L || (!cleanText.isEmpty() && cleanText.equals(prevKey.lastText))) {
-                    Log.d(TAG, "Debounced: Duplicate notification update for key " + keyIdentifier + " (elapsed: " + elapsed + "ms, when: " + notifWhen + ")");
+                if ((notifWhen > 0 && notifWhen == prevKey.notifWhen) || elapsed < 2800L || (!cleanText.isEmpty() && cleanText.equals(prevKey.lastText))) {
+                    Log.d(TAG, "Debounced [Tier 1 - Key]: Duplicate notification update for key " + keyIdentifier + " (elapsed: " + elapsed + "ms, when: " + notifWhen + ")");
                     prevKey.timestamp = now;
                     if (!cleanText.isEmpty()) {
                         prevKey.lastText = cleanText;
@@ -149,13 +171,28 @@ public class SoundManager {
         recentNotifKeyCache.put(keyIdentifier, new KeyRecord(now, notifWhen, cleanText));
 
         // ----------------------------------------------------
-        // TẦNG 2: LỌC TRÙNG LẶP FINGERPRINT NỘI DUNG (10 GIÂY)
-        // Ngăn 2 thông báo có cùng người gửi và cùng nội dung
+        // TẦNG 2: LỌC NỘI DUNG TIN NHẮN TOÀN CỤC XUYÊN SUỐT (3.5 GIÂY)
+        // Ngăn 2 thông báo liên tiếp có cùng nội dung (ví dụ: "[hình ảnh]", "alo anh em") bất kể tên gửi
+        // ----------------------------------------------------
+        if (!cleanText.isEmpty()) {
+            Long lastTextTime = recentTextOnlyCache.get(cleanText);
+            if (lastTextTime != null && (now - lastTextTime < TEXT_CONTENT_WINDOW_MS)) {
+                Log.d(TAG, "Debounced [Tier 2 - Content Window]: Duplicate content received within 3.5s -> '" + cleanText + "' (elapsed: " + (now - lastTextTime) + "ms)");
+                recentTextOnlyCache.put(cleanText, now);
+                if (!fingerprint.equals("||")) recentFingerprintCache.put(fingerprint, now);
+                if (!cleanSender.isEmpty()) lastSenderSpamTimes.put(cleanSender, now);
+                return true;
+            }
+            recentTextOnlyCache.put(cleanText, now);
+        }
+
+        // ----------------------------------------------------
+        // TẦNG 3: LỌC TRÙNG LẶP FINGERPRINT (NGƯỜI GỬI + NỘI DUNG) (12 GIÂY)
         // ----------------------------------------------------
         if (!fingerprint.equals("||") && !cleanText.isEmpty()) {
             Long lastFpTime = recentFingerprintCache.get(fingerprint);
             if (lastFpTime != null && (now - lastFpTime < FINGERPRINT_WINDOW_MS)) {
-                Log.d(TAG, "Debounced: Duplicate content fingerprint ignored -> " + fingerprint + " (elapsed: " + (now - lastFpTime) + "ms)");
+                Log.d(TAG, "Debounced [Tier 3 - Fingerprint]: Duplicate fingerprint ignored -> " + fingerprint + " (elapsed: " + (now - lastFpTime) + "ms)");
                 recentFingerprintCache.put(fingerprint, now);
                 if (!cleanSender.isEmpty()) lastSenderSpamTimes.put(cleanSender, now);
                 return true;
@@ -164,7 +201,7 @@ public class SoundManager {
         }
 
         // ----------------------------------------------------
-        // TẦNG 3: CHỐNG SPAM / HARD COOLDOWN THEO NGƯỜI GỬI (TỐI THIỂU 2.5s HOẶC THEO CẤU HÌNH)
+        // TẦNG 4: CHỐNG SPAM / HARD COOLDOWN THEO NGƯỜI GỬI HOẶC NHÓM (TỐI THIỂU 2.8s HOẶC THEO CẤU HÌNH)
         // ----------------------------------------------------
         long effectiveSenderCooldown = MIN_SENDER_COOLDOWN_MS;
         if (prefs.isAntiSpamEnabled()) {
@@ -175,7 +212,7 @@ public class SoundManager {
         if (!cleanSender.isEmpty()) {
             Long lastSenderTime = lastSenderSpamTimes.get(cleanSender);
             if (lastSenderTime != null && (now - lastSenderTime < effectiveSenderCooldown)) {
-                Log.d(TAG, "Debounced: Sender cooldown active for '" + senderOrGroup + "' (" + (now - lastSenderTime) + "ms < " + effectiveSenderCooldown + "ms)");
+                Log.d(TAG, "Debounced [Tier 4 - Sender Cooldown]: Active for '" + senderOrGroup + "' (" + (now - lastSenderTime) + "ms < " + effectiveSenderCooldown + "ms)");
                 lastSenderSpamTimes.put(cleanSender, now);
                 return true;
             }
@@ -183,10 +220,10 @@ public class SoundManager {
         }
 
         // ----------------------------------------------------
-        // TẦNG 4: KHÓA THỜI GIAN PHÁT TOÀN CỤC (Ít nhất 2.2 GIÂY GIỮA 2 LẦN PHÁT BẤT KỲ)
+        // TẦNG 5: KHÓA THỜI GIAN PHÁT TOÀN CỤC (Ít nhất 2.5 GIÂY GIỮA 2 LẦN PHÁT BẤT KỲ)
         // ----------------------------------------------------
         if (now - lastAudioPlayTimestamp < MIN_AUDIO_PLAY_INTERVAL_MS) {
-            Log.d(TAG, "Debounced: Global audio cooldown active (" + (now - lastAudioPlayTimestamp) + "ms < " + MIN_AUDIO_PLAY_INTERVAL_MS + "ms)");
+            Log.d(TAG, "Debounced [Tier 5 - Global Interlock]: Active (" + (now - lastAudioPlayTimestamp) + "ms < " + MIN_AUDIO_PLAY_INTERVAL_MS + "ms)");
             return true;
         }
 
@@ -201,6 +238,24 @@ public class SoundManager {
     }
 
     private void cleanupCache(long now) {
+        if (recentNotifWhenCache.size() > 50) {
+            Iterator<Map.Entry<Long, Long>> it = recentNotifWhenCache.entrySet().iterator();
+            while (it.hasNext()) {
+                if (now - it.next().getValue() > 30000L) {
+                    it.remove();
+                }
+            }
+        }
+
+        if (recentTextOnlyCache.size() > 50) {
+            Iterator<Map.Entry<String, Long>> it = recentTextOnlyCache.entrySet().iterator();
+            while (it.hasNext()) {
+                if (now - it.next().getValue() > 15000L) {
+                    it.remove();
+                }
+            }
+        }
+
         if (recentNotifKeyCache.size() > 50) {
             Iterator<Map.Entry<String, KeyRecord>> it = recentNotifKeyCache.entrySet().iterator();
             while (it.hasNext()) {

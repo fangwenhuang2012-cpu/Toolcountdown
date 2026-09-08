@@ -19,11 +19,16 @@ public class NotificationClassifier {
     private static final Pattern PATTERN_BRACKET_MEMBER = Pattern.compile("^\\[([^\\]]{1,35})\\]:\\s*([\\s\\S]*)");
     // Regex dạng hành động trong nhóm: "Nam đã gửi một ảnh", "Hoa đã chia sẻ vị trí", v.v.
     private static final Pattern PATTERN_GROUP_ACTION = Pattern.compile(
-            "^([^:\\n]{1,35})\\s+(đã gửi|đã chia sẻ|đã tạo|đã ghim|đã đổi|đã thêm|đã rời|đã tham gia|gửi|thu hồi)\\b",
+            "^([^:\\n]{1,35})\\s+(đã gửi|đã chia sẻ|đã tạo|đã ghim|đã đổi|đã thêm|đã rời|đã tham gia|gửi|thu hồi)\\s*([\\s\\S]*)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
     );
     // Regex tiêu đề chứa phân cách nhóm: "Nam > Team Dev", "Nam @ Team Dev", "Nam trong Team Dev"
     private static final Pattern PATTERN_TITLE_GROUP_SEP = Pattern.compile("(\\s+>\\s+|\\s+@\\s+|\\s+->\\s+|\\s+trong\\s+)");
+
+    // Regex bóc tách số đếm tin nhắn chưa đọc trong tiêu đề: "(2) Nhóm", "Nhóm (2)", "3 tin nhắn mới từ..."
+    private static final Pattern PATTERN_UNREAD_PREFIX = Pattern.compile("^\\s*\\(?\\[?\\d+\\]?\\)?\\s*");
+    private static final Pattern PATTERN_UNREAD_SUFFIX = Pattern.compile("\\s*\\(?\\[?\\d+\\s*(?:tin nhắn|tin nhắn mới|tin)?\\]?\\)?\\s*$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PATTERN_UNREAD_FROM = Pattern.compile("^\\s*\\d+\\s*(?:tin nhắn|tin nhắn mới)?\\s*từ\\s*", Pattern.CASE_INSENSITIVE);
 
     public enum MessageType {
         DIRECT_1_1,    // Tin nhắn cá nhân 1-1 (bất kỳ ai)
@@ -223,112 +228,219 @@ public class NotificationClassifier {
         // 4.1 Cờ hệ thống xác định Group Conversation
         boolean isGroupFlag = extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION, false);
         if (isGroupFlag) {
-            String groupName = !convoTitle.isEmpty() ? convoTitle : (!title.isEmpty() ? title : subText);
+            String groupName = !convoTitle.isEmpty() ? convoTitle : (!subText.isEmpty() ? subText : (!title.isEmpty() ? title : summary));
+            groupName = cleanSenderOrGroupName(groupName);
             Log.d(TAG, "Classified as GROUP via EXTRA_IS_GROUP_CONVERSATION -> " + groupName);
             return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.2 Có EXTRA_CONVERSATION_TITLE (Tiêu đề cuộc trò chuyện nhóm)
         if (!convoTitle.isEmpty()) {
-            Log.d(TAG, "Classified as GROUP via EXTRA_CONVERSATION_TITLE: " + convoTitle);
-            return new ClassificationResult(MessageType.GROUP, convoTitle, text, title);
+            String groupName = cleanSenderOrGroupName(convoTitle);
+            Log.d(TAG, "Classified as GROUP via EXTRA_CONVERSATION_TITLE: " + groupName);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.3 Notification Tag chứa định danh nhóm của Zalo (ví dụ: g_..., group_..., chat_group_...)
         if (tag.startsWith("g_") || tag.startsWith("group") || tag.contains("group_") || tag.contains("chat_group") || tag.contains("@g.us")) {
             String groupName = !subText.isEmpty() ? subText : title;
+            groupName = cleanSenderOrGroupName(groupName);
             Log.d(TAG, "Classified as GROUP via Tag identifier: " + tag + " -> " + groupName);
             return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.4 Kiểm tra qua MessagingStyle messages bundle array
         if (!messagingSender.isEmpty() && !title.isEmpty() && !messagingSender.equalsIgnoreCase(title)) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via MessagingStyle sender!=title (" + messagingSender + " in " + title + ")");
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.5 Phân tích SubText, InfoText, SummaryText (Zalo thường gán tên nhóm ở đây)
         if (!subText.isEmpty() && !subText.equalsIgnoreCase(title)) {
+            String groupName = cleanSenderOrGroupName(subText);
             Log.d(TAG, "Classified as GROUP via SubText: " + subText + " (Title: " + title + ")");
-            return new ClassificationResult(MessageType.GROUP, subText, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         if (!summary.isEmpty() && !summary.equalsIgnoreCase(title)) {
+            String groupName = cleanSenderOrGroupName(summary);
             Log.d(TAG, "Classified as GROUP via SummaryText: " + summary);
-            return new ClassificationResult(MessageType.GROUP, summary, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         if (!info.isEmpty() && !info.equalsIgnoreCase(title)) {
+            String groupName = cleanSenderOrGroupName(info);
             Log.d(TAG, "Classified as GROUP via InfoText: " + info);
-            return new ClassificationResult(MessageType.GROUP, info, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.6 Phân tích định dạng Tiêu đề đặc trưng của nhóm:
         // "[Tên Nhóm]", "Tên Người > Tên Nhóm", "Tên Người @ Tên Nhóm", "Tên Người trong Tên Nhóm"
         if (title.startsWith("[") && title.contains("]")) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via Title bracket: " + title);
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         Matcher titleSepMatcher = PATTERN_TITLE_GROUP_SEP.matcher(title);
         if (titleSepMatcher.find()) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via Title separator: " + title);
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.7 Phân tích định dạng Nội dung đặc trưng của nhóm:
         // "Thành viên: Tin nhắn", "[Thành viên]: Tin nhắn"
         Matcher memberPrefixMatcher = PATTERN_MEMBER_PREFIX.matcher(text);
         if (memberPrefixMatcher.find()) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via member prefix in text: " + text);
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         Matcher bracketMemberMatcher = PATTERN_BRACKET_MEMBER.matcher(text);
         if (bracketMemberMatcher.find()) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via bracket member in text: " + text);
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         Matcher actionMatcher = PATTERN_GROUP_ACTION.matcher(text);
         if (actionMatcher.find()) {
+            String groupName = cleanSenderOrGroupName(title);
             Log.d(TAG, "Classified as GROUP via group action in text: " + text);
-            return new ClassificationResult(MessageType.GROUP, title, text, title);
+            return new ClassificationResult(MessageType.GROUP, groupName, text, title);
         }
 
         // 4.8 Kiểm tra text lines nếu có tiền tố thành viên
         if (textLines != null && textLines.length > 0) {
             for (CharSequence line : textLines) {
                 if (line != null && PATTERN_MEMBER_PREFIX.matcher(line.toString().trim()).find()) {
+                    String groupName = cleanSenderOrGroupName(title);
                     Log.d(TAG, "Classified as GROUP via EXTRA_TEXT_LINES member prefix");
-                    return new ClassificationResult(MessageType.GROUP, title, text, title);
+                    return new ClassificationResult(MessageType.GROUP, groupName, text, title);
                 }
             }
         }
 
         // ==================== TIN NHẮN CÁ NHÂN (1-1) ====================
         if (!title.isEmpty()) {
-            Log.d(TAG, "Classified as DIRECT_1_1. Sender: " + title + " | Text: " + text);
-            return new ClassificationResult(MessageType.DIRECT_1_1, title, text, title);
+            String cleanSender = cleanSenderOrGroupName(title);
+            Log.d(TAG, "Classified as DIRECT_1_1. Sender: " + cleanSender + " | Text: " + text);
+            return new ClassificationResult(MessageType.DIRECT_1_1, cleanSender, text, title);
         }
 
         return new ClassificationResult(MessageType.SYSTEM_IGNORE, "", "");
     }
 
     /**
-     * Chuẩn hóa nội dung tin nhắn để phục vụ lọc trùng lặp ổn định (loại bỏ tiền tố người gửi nếu có)
+     * Chuẩn hóa tên người gửi hoặc tên nhóm (loại bỏ số đếm chưa đọc như '(2)', '[3]', '3 tin nhắn mới từ')
+     */
+    public static String cleanSenderOrGroupName(String rawName) {
+        if (rawName == null) return "";
+        String s = rawName.trim();
+        if (s.isEmpty()) return "";
+
+        // Bỏ tiền tố "3 tin nhắn mới từ "
+        Matcher mFrom = PATTERN_UNREAD_FROM.matcher(s);
+        if (mFrom.find()) {
+            s = s.substring(mFrom.end()).trim();
+        }
+
+        // Bỏ tiền tố "(2) ", "[2] "
+        Matcher mPre = PATTERN_UNREAD_PREFIX.matcher(s);
+        if (mPre.find()) {
+            s = s.substring(mPre.end()).trim();
+        }
+
+        // Bỏ hậu tố " (2)", " [3]", " (2 tin nhắn mới)"
+        Matcher mSuf = PATTERN_UNREAD_SUFFIX.matcher(s);
+        if (mSuf.find()) {
+            s = s.substring(0, mSuf.start()).trim();
+        }
+
+        // Bỏ ngoặc vuông bao quanh nếu có: "[Nhóm Dev]" -> "Nhóm Dev"
+        if (s.startsWith("[") && s.endsWith("]") && s.length() > 2) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+
+        return s.isEmpty() ? rawName.trim() : s;
+    }
+
+    /**
+     * Chuẩn hóa nội dung tin nhắn để phục vụ lọc trùng lặp ổn định
+     * (loại bỏ tiền tố người gửi 'Nam: ', chuẩn hóa các hành động 'Nam đã gửi 1 ảnh' -> '[hình ảnh]')
      */
     public static String cleanMessageContent(String rawText) {
         if (rawText == null) return "";
         String t = rawText.trim();
+        if (t.isEmpty()) return "";
+
+        // 1. Loại bỏ tiền tố "Tên: "
         Matcher m1 = PATTERN_MEMBER_PREFIX.matcher(t);
         if (m1.find()) {
-            return m1.group(2).trim();
+            t = m1.group(2).trim();
+        } else {
+            // 2. Loại bỏ tiền tố "[Tên]: "
+            Matcher m2 = PATTERN_BRACKET_MEMBER.matcher(t);
+            if (m2.find()) {
+                t = m2.group(2).trim();
+            }
         }
-        Matcher m2 = PATTERN_BRACKET_MEMBER.matcher(t);
-        if (m2.find()) {
-            return m2.group(2).trim();
+
+        // 3. Chuẩn hóa các hành động nhóm: "Nam đã gửi một ảnh", "Hoa đã gửi 1 sticker", v.v.
+        Matcher mAction = PATTERN_GROUP_ACTION.matcher(t);
+        if (mAction.find()) {
+            String actionVerb = mAction.group(2) != null ? mAction.group(2).toLowerCase() : "";
+            String actionDetail = mAction.group(3) != null ? mAction.group(3).toLowerCase() : "";
+            String combinedAction = (actionVerb + " " + actionDetail).trim();
+
+            if (combinedAction.contains("ảnh") || combinedAction.contains("hình") || combinedAction.contains("photo") || combinedAction.contains("image")) {
+                return "[hình ảnh]";
+            }
+            if (combinedAction.contains("nhãn dán") || combinedAction.contains("sticker") || combinedAction.contains("icon") || combinedAction.contains("biểu cảm")) {
+                return "[nhãn dán]";
+            }
+            if (combinedAction.contains("video") || combinedAction.contains("clip")) {
+                return "[video]";
+            }
+            if (combinedAction.contains("vị trí") || combinedAction.contains("location") || combinedAction.contains("tọa độ")) {
+                return "[vị trí]";
+            }
+            if (combinedAction.contains("thoại") || combinedAction.contains("voice") || combinedAction.contains("audio") || combinedAction.contains("ghi âm")) {
+                return "[tin nhắn thoại]";
+            }
+            if (combinedAction.contains("tệp") || combinedAction.contains("tập tin") || combinedAction.contains("file") || combinedAction.contains("tài liệu")) {
+                return "[tệp tin]";
+            }
+            if (!actionDetail.isEmpty()) {
+                return actionDetail;
+            }
+            return combinedAction;
         }
+
+        // 4. Chuẩn hóa các dạng placeholder media đơn lẻ
+        String lower = t.toLowerCase();
+        if (lower.contains("hình ảnh") || lower.contains("đã gửi 1 ảnh") || lower.contains("đã gửi một ảnh") || lower.equals("[hình ảnh]") || lower.equals("[ảnh]")) {
+            return "[hình ảnh]";
+        }
+        if (lower.contains("nhãn dán") || lower.contains("sticker") || lower.equals("[nhãn dán]") || lower.equals("[sticker]")) {
+            return "[nhãn dán]";
+        }
+        if (lower.contains("video") || lower.equals("[video]")) {
+            return "[video]";
+        }
+        if (lower.contains("vị trí") || lower.equals("[vị trí]") || lower.equals("[location]")) {
+            return "[vị trí]";
+        }
+        if (lower.contains("tin nhắn thoại") || lower.contains("voice") || lower.equals("[tin nhắn thoại]")) {
+            return "[tin nhắn thoại]";
+        }
+        if (lower.contains("tập tin") || lower.contains("tệp tin") || lower.equals("[tập tin]") || lower.equals("[file]")) {
+            return "[tệp tin]";
+        }
+
         return t;
     }
 }
