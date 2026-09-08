@@ -3,8 +3,13 @@ name: Build AI VietMap Camera HUD APK
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "Android_Project/**"
+      - ".github/workflows/android.yml"
   pull_request:
     branches: [ "main" ]
+    paths:
+      - "Android_Project/**"
   workflow_dispatch:
 
 jobs:
