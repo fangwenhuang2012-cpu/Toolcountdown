@@ -10,8 +10,8 @@ android {
         applicationId "com.openclaw.zalosound"
         minSdk 23
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0-PRO"
+        versionCode 2
+        versionName "1.0.1-PRO"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,7 +45,7 @@ android {
 
     applicationVariants.all { variant ->
         variant.outputs.all {
-            outputFileName = "Zalo_Notification_Sound_Pro_v1.0.apk"
+            outputFileName = "Zalo_Notification_Sound_Pro_v1.0.1.apk"
         }
     }
 }
