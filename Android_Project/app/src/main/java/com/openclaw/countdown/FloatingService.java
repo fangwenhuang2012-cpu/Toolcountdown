@@ -262,10 +262,10 @@ public class FloatingService extends Service {
             }
         });
 
-        streamReader = new VietMapStreamReader(this, null, null, detector);
+        streamReader = new VietMapStreamReader(this, null, detector);
         streamReader.setStatusListener(new VietMapStreamReader.StreamStatusListener() {
             @Override
-            public void onStatusUpdated(String streamStatus, boolean isConnected) {
+            public void onStatusUpdated(String streamStatus, boolean isConnected, int currentFps, int frameCount) {
                 currentStreamStatus = streamStatus;
                 pushStatusToUi();
             }
