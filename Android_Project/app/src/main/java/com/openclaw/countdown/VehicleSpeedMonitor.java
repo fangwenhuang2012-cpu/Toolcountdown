@@ -1,6 +1,8 @@
 package com.openclaw.countdown;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -8,6 +10,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -38,6 +42,7 @@ public class VehicleSpeedMonitor {
     private boolean isMonitoring = false;
     private boolean isStopped = true;
     private Location lastLocation = null;
+    private long lastLocationTimestamp = 0;
     private Runnable stopConfirmationRunnable;
 
     // Bộ lọc Kalman Lọc Nhiễu Tốc độ GPS 1 Chiều (1D Kalman Speed Filter)
@@ -46,42 +51,48 @@ public class VehicleSpeedMonitor {
     private void handleNewLocation(Location location) {
         if (location == null) return;
 
-        // 1. Lọc bỏ tín hiệu vị trí có độ sai số quá cao (> 30m) hoặc định vị trạm phát sóng (Network) kém chính xác
-        if (location.hasAccuracy() && location.getAccuracy() > 30.0f) {
+        long currentTime = System.currentTimeMillis();
+        // Bỏ qua nếu dữ liệu vị trí bị bắn liên tục trùng lặp quá nhanh (< 120ms)
+        if (lastLocationTimestamp > 0 && (currentTime - lastLocationTimestamp < 120)) {
             return;
         }
-        if (LocationManager.NETWORK_PROVIDER.equals(location.getProvider()) && location.hasAccuracy() && location.getAccuracy() > 15.0f) {
+
+        // Lọc bỏ tọa độ nếu sai số quá lớn (> 80m) và KHÔNG có dữ liệu tốc độ phần cứng
+        if (location.hasAccuracy() && location.getAccuracy() > 80.0f && (!location.hasSpeed() || location.getSpeed() <= 0)) {
             return;
         }
 
         float rawSpeedKmh = 0f;
 
-        // 2. Ưu tiên tốc độ thực đo từ phần cứng GPS nếu có
+        // 1. Ưu tiên số 1: Tốc độ đo trực tiếp từ chip vệ tinh GPS (Doppler speed)
         if (location.hasSpeed() && location.getSpeed() >= 0) {
             rawSpeedKmh = location.getSpeed() * 3.6f;
         } else if (lastLocation != null) {
-            // 3. Dự phòng: Tính khoảng cách giữa 2 điểm GPS chuẩn
+            // 2. Dự phòng: Tính khoảng cách giữa 2 điểm GPS chuẩn
             float distanceMeters = lastLocation.distanceTo(location);
-            long timeDeltaMs = location.getTime() - lastLocation.getTime();
+            long timeDeltaMs = currentTime - lastLocationTimestamp;
 
-            if (timeDeltaMs >= 300 && timeDeltaMs < 10000 && distanceMeters > 0.3f) {
+            if (timeDeltaMs >= 200 && timeDeltaMs < 10000 && distanceMeters > 0.2f) {
                 float calculatedMps = distanceMeters / (timeDeltaMs / 1000.0f);
                 rawSpeedKmh = calculatedMps * 3.6f;
             }
         }
 
-        // Triệt tiêu hiện tượng GPS Drift khi đứng yên (Tốc độ dưới 1.8 km/h coi như 0 km/h)
-        if (rawSpeedKmh < 1.8f) {
+        // Triệt tiêu hiện tượng GPS Drift khi đứng yên (Tốc độ dưới 1.5 km/h coi như 0 km/h)
+        if (rawSpeedKmh < 1.5f) {
             rawSpeedKmh = 0f;
         }
 
         lastLocation = location;
+        lastLocationTimestamp = currentTime;
 
         // Lọc nhiễu qua Kalman Filter
         float smoothedSpeedKmh = kalmanFilter.update(rawSpeedKmh);
         if (smoothedSpeedKmh < 1.0f) {
             smoothedSpeedKmh = 0f;
         }
+
+        Log.d(TAG, "Tốc độ xe: " + String.format("%.1f", smoothedSpeedKmh) + " km/h (Provider: " + location.getProvider() + ")");
 
         if (listener != null) {
             listener.onSpeedUpdated(smoothedSpeedKmh);
@@ -100,10 +111,14 @@ public class VehicleSpeedMonitor {
         public void onStatusChanged(String provider, int status, Bundle extras) {}
 
         @Override
-        public void onProviderEnabled(String provider) {}
+        public void onProviderEnabled(String provider) {
+            Log.d(TAG, "Provider bật: " + provider);
+        }
 
         @Override
-        public void onProviderDisabled(String provider) {}
+        public void onProviderDisabled(String provider) {
+            Log.d(TAG, "Provider tắt: " + provider);
+        }
     };
 
     public VehicleSpeedMonitor(Context context, SpeedListener listener) {
@@ -122,48 +137,82 @@ public class VehicleSpeedMonitor {
 
         kalmanFilter.reset();
         lastLocation = null;
-        boolean startedWithFused = false;
+        lastLocationTimestamp = 0;
 
-        // 1. Thử dùng FusedLocationProviderClient (Ưu tiên GPS độ chính xác cao từ Google Services)
+        if (context != null) {
+            boolean hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            if (!hasFine && !hasCoarse) {
+                Log.e(TAG, "Chưa được cấp quyền Vị trí (GPS)!");
+                return;
+            }
+        }
+
+        // 1. Luôn đăng ký LocationManager phần cứng GPS (Đặc biệt quan trọng cho Android Box ô tô)
+        if (locationManager != null) {
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER, 400, 0f, locationListener, Looper.getMainLooper()
+                    );
+                    Log.d(TAG, "Đã kích hoạt LocationManager GPS_PROVIDER phần cứng.");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi đăng ký LocationManager GPS_PROVIDER", e);
+            }
+
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.NETWORK_PROVIDER, 800, 0f, locationListener, Looper.getMainLooper()
+                    );
+                    Log.d(TAG, "Đã kích hoạt LocationManager NETWORK_PROVIDER.");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi đăng ký LocationManager NETWORK_PROVIDER", e);
+            }
+
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.PASSIVE_PROVIDER, 500, 0f, locationListener, Looper.getMainLooper()
+                    );
+                    Log.d(TAG, "Đã kích hoạt LocationManager PASSIVE_PROVIDER.");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi đăng ký LocationManager PASSIVE_PROVIDER", e);
+            }
+        }
+
+        // 2. Đồng thời đăng ký FusedLocationProviderClient (nếu có Google Play Services)
         if (fusedLocationClient != null) {
             try {
                 LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500)
-                        .setMinUpdateIntervalMillis(300)
-                        .setMinUpdateDistanceMeters(0.1f)
+                        .setMinUpdateIntervalMillis(250)
+                        .setMinUpdateDistanceMeters(0f)
                         .build();
 
                 fusedLocationCallback = new LocationCallback() {
                     @Override
                     public void onLocationResult(LocationResult locationResult) {
-                        if (locationResult != null && locationResult.getLastLocation() != null) {
-                            handleNewLocation(locationResult.getLastLocation());
+                        if (locationResult != null) {
+                            for (Location loc : locationResult.getLocations()) {
+                                if (loc != null) {
+                                    handleNewLocation(loc);
+                                }
+                            }
                         }
                     }
                 };
 
                 fusedLocationClient.requestLocationUpdates(locationRequest, fusedLocationCallback, Looper.getMainLooper());
-                isMonitoring = true;
-                startedWithFused = true;
-                Log.d(TAG, "Đã khởi chạy FusedLocationProviderClient theo dõi tốc độ GPS.");
+                Log.d(TAG, "Đã kích hoạt FusedLocationProviderClient.");
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi đăng ký FusedLocationProviderClient", e);
             }
         }
 
-        // 2. Chỉ dùng LocationManager fallback khi FusedLocation KHÔNG khả dụng (tránh trùng lặp gây giật lag)
-        if (!startedWithFused && locationManager != null) {
-            try {
-                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER, 500, 0.5f, locationListener, Looper.getMainLooper()
-                    );
-                    isMonitoring = true;
-                    Log.d(TAG, "Đã khởi chạy LocationManager GPS_PROVIDER fallback.");
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Lỗi đăng ký LocationManager GPS_PROVIDER", e);
-            }
-        }
+        isMonitoring = true;
     }
 
     private void processSpeedChange(final float speedKmh) {
@@ -263,5 +312,3 @@ public class VehicleSpeedMonitor {
         }
     }
 }
-
-

@@ -1010,14 +1010,15 @@ if (document.readyState === 'loading') {
 }
 
 window.setCameraCountdown = function(seconds) {
-    if (typeof seconds !== 'number' || seconds < 10 || seconds > 99) {
-        console.log("[VietMap AI HUD] Ignored initial countdown < 10s or invalid:", seconds);
+    if (typeof seconds !== 'number' || seconds < 1 || seconds > 99) {
         return;
     }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
 
     countdownTime = seconds;
-    initialSetTime = seconds;
+    if (initialSetTime <= 0 || seconds > initialSetTime || !isRunning) {
+        initialSetTime = seconds;
+    }
 
     if (floatingWidget) {
         floatingWidget.classList.remove('hidden');
@@ -1026,12 +1027,23 @@ window.setCameraCountdown = function(seconds) {
     startTimer();
 };
 
+window.onVehicleStopped = function() {
+    console.log("[VietMap AI HUD] Vehicle stopped - ready to detect");
+    if (floatingWidget) {
+        floatingWidget.classList.remove('hidden');
+    }
+};
+
+window.onVehicleMovedBackground = function() {
+    console.log("[VietMap AI HUD] Vehicle moved background");
+    if (!isRunning || countdownTime <= 0) {
+        stopTimer();
+    }
+};
+
 window.onVehicleMoved = function() {
     console.log("[VietMap AI HUD] Vehicle moved - hiding HUD");
     stopTimer();
-    if (floatingWidget) {
-        floatingWidget.classList.add('hidden');
-    }
 };
 
 window.onRedLightEnded = function() {
@@ -1043,9 +1055,6 @@ window.onRedLightEnded = function() {
     if (statusIcon) statusIcon.textContent = "🟢";
 
     playFinishAlarm();
-    setTimeout(() => {
-        if (floatingWidget) floatingWidget.classList.add('hidden');
-    }, 800);
 };
     </script>
 </body>

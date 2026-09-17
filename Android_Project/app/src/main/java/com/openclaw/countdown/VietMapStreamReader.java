@@ -140,7 +140,11 @@ public class VietMapStreamReader {
                         NetworkCapabilities caps = cm.getNetworkCapabilities(net);
                         if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
                             cameraWifiNetwork = net;
-                            postLog("Đã ghim (bind) Socket vào Wi-Fi Network: " + net);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                try {
+                                    cm.bindProcessToNetwork(net);
+                                } catch (Exception ignored) {}
+                            }
                             return;
                         }
                     }
@@ -155,13 +159,23 @@ public class VietMapStreamReader {
                         @Override
                         public void onAvailable(Network network) {
                             cameraWifiNetwork = network;
-                            postLog("Wi-Fi Interface khả dụng: " + network);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                try {
+                                    cm.bindProcessToNetwork(network);
+                                } catch (Exception ignored) {}
+                            }
+                            postLog("Wi-Fi Interface khả dụng (Network " + network + ")");
                         }
 
                         @Override
                         public void onLost(Network network) {
                             if (cameraWifiNetwork != null && cameraWifiNetwork.equals(network)) {
                                 cameraWifiNetwork = null;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    try {
+                                        cm.bindProcessToNetwork(null);
+                                    } catch (Exception ignored) {}
+                                }
                                 postLog("Mất kết nối Wi-Fi Interface!");
                             }
                         }
@@ -183,6 +197,30 @@ public class VietMapStreamReader {
      */
     public List<String> getCandidateIps() {
         List<String> ips = new ArrayList<>();
+
+        try {
+            if (context != null) {
+                WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    DhcpInfo dhcp = wm.getDhcpInfo();
+                    if (dhcp != null) {
+                        if (dhcp.gateway != 0) {
+                            String gIp = formatIp(dhcp.gateway);
+                            if (!"0.0.0.0".equals(gIp) && !ips.contains(gIp)) {
+                                ips.add(gIp);
+                            }
+                        }
+                        if (dhcp.serverAddress != 0) {
+                            String sIp = formatIp(dhcp.serverAddress);
+                            if (!"0.0.0.0".equals(sIp) && !ips.contains(sIp)) {
+                                ips.add(sIp);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         try {
             if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -205,25 +243,12 @@ public class VietMapStreamReader {
             }
         } catch (Exception ignored) {}
 
-        try {
-            if (context != null) {
-                WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-                if (wm != null) {
-                    DhcpInfo dhcp = wm.getDhcpInfo();
-                    if (dhcp != null && dhcp.gateway != 0) {
-                        String gIp = formatIp(dhcp.gateway);
-                        if (!"0.0.0.0".equals(gIp) && !ips.contains(gIp)) {
-                            ips.add(gIp);
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-
-        // Mặc định chuẩn 100% của TS-C1 và các dòng VietMap Novatek
+        // Mặc định chuẩn của TS-C1 và các dòng VietMap Novatek
         if (!ips.contains(DEFAULT_VIETMAP_IP)) ips.add(DEFAULT_VIETMAP_IP);
-        if (!ips.contains("192.168.0.1")) ips.add("192.168.0.1");
         if (!ips.contains("192.168.1.1")) ips.add("192.168.1.1");
+        if (!ips.contains("192.168.0.1")) ips.add("192.168.0.1");
+        if (!ips.contains("192.168.43.1")) ips.add("192.168.43.1");
+        if (!ips.contains("192.168.2.1")) ips.add("192.168.2.1");
 
         return ips;
     }
@@ -275,12 +300,12 @@ public class VietMapStreamReader {
         try {
             postLog("[TS-C1] Đang gửi Handshake tới " + gatewayIp + "...");
 
-            // Lệnh 1: Heartbeat / Connect
+            // Lệnh 1: Heartbeat / Connect (cmd=3001)
             String connectUrl = "http://" + gatewayIp + "/?custom=1&cmd=3001";
             HttpURLConnection conn = openWifiConnection(connectUrl);
             if (conn != null) {
-                conn.setConnectTimeout(800);
-                conn.setReadTimeout(800);
+                conn.setConnectTimeout(1500);
+                conn.setReadTimeout(1500);
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("User-Agent", "VIETMAP REC/2.0");
                 int respCode = conn.getResponseCode();
@@ -291,12 +316,12 @@ public class VietMapStreamReader {
                 }
             }
 
-            // Lệnh 2: Chuyển sang Movie Live View Preview Mode
+            // Lệnh 2: Chuyển sang Movie Live View Preview Mode (cmd=2001)
             String liveModeUrl = "http://" + gatewayIp + "/?custom=1&cmd=2001&par=1";
             HttpURLConnection liveConn = openWifiConnection(liveModeUrl);
             if (liveConn != null) {
-                liveConn.setConnectTimeout(800);
-                liveConn.setReadTimeout(800);
+                liveConn.setConnectTimeout(1500);
+                liveConn.setReadTimeout(1500);
                 liveConn.setRequestMethod("GET");
                 liveConn.setRequestProperty("User-Agent", "VIETMAP REC/2.0");
                 int code2 = liveConn.getResponseCode();
@@ -304,23 +329,23 @@ public class VietMapStreamReader {
                 postLog("[TS-C1] Lệnh cmd=2001 (Live View) -> HTTP " + code2);
             }
 
-            // Lệnh 3: Kích hoạt Sub-channel Live Stream
+            // Lệnh 3: Kích hoạt Sub-channel Live Stream (cmd=2016)
             String subStreamUrl = "http://" + gatewayIp + "/?custom=1&cmd=2016&par=1";
             HttpURLConnection subConn = openWifiConnection(subStreamUrl);
             if (subConn != null) {
-                subConn.setConnectTimeout(600);
-                subConn.setReadTimeout(600);
+                subConn.setConnectTimeout(1200);
+                subConn.setReadTimeout(1200);
                 subConn.setRequestMethod("GET");
                 subConn.setRequestProperty("User-Agent", "VIETMAP REC/2.0");
                 subConn.getResponseCode();
                 subConn.disconnect();
             }
 
-            // Đợi 800ms cho phần cứng Novatek khởi động bộ nén MJPEG
-            Thread.sleep(800);
-            postLog("[TS-C1] Handshake hoàn tất. Bộ mã hóa Cam sẵn sàng!");
+            // Đợi 500ms cho phần cứng Novatek chuẩn bị khung hình
+            Thread.sleep(500);
+            postLog("[TS-C1] Handshake hoàn tất.");
         } catch (Exception e) {
-            postLog("[TS-C1] Handshake exception: " + e.getMessage());
+            postLog("[TS-C1] Handshake note: " + e.getMessage());
         }
         return handshakeOk;
     }
@@ -344,6 +369,9 @@ public class VietMapStreamReader {
                     postLog("[Test] Thử tải 1 ảnh Snapshot từ " + activeCameraIp + "...");
                     String testUrl = "http://" + activeCameraIp + "/?custom=1&cmd=2017";
                     Bitmap bmp = fetchHttpSnapshotFrame(testUrl);
+                    if (bmp == null) {
+                        bmp = fetchHttpSnapshotFrame("http://" + activeCameraIp + "/cgi-bin/hi3510/snap.cgi");
+                    }
                     if (bmp != null) {
                         postLog("[Test] Đã nhận thành công ảnh Snapshot (" + bmp.getWidth() + "x" + bmp.getHeight() + ")!");
                         handleDecodedFrame(bmp, "Test Snapshot");
@@ -411,11 +439,8 @@ public class VietMapStreamReader {
                     activeCameraIp = ip;
                     updateStatus("Đang kết nối Cam IP: " + ip + "...", false);
 
-                    // 1. Kiểm tra nhanh Port 80 và gửi Handshake Novatek
-                    boolean port80Open = isPortOpen(ip, 80, 400);
-                    if (port80Open) {
-                        sendVietMapHandshake(ip);
-                    }
+                    // 1. Gửi Handshake Novatek kích hoạt bộ mã hóa Live View
+                    sendVietMapHandshake(ip);
 
                     // Chế độ 1: Snapshot CGI nếu chọn FORCE_SNAPSHOT_CGI
                     if (currentMode == StreamMode.FORCE_SNAPSHOT_CGI) {
@@ -424,8 +449,8 @@ public class VietMapStreamReader {
                         if (streamSuccess) break;
                     }
 
-                    // Chế độ 2: TCP Socket Port 8192 (Novatek Live Stream)
-                    boolean port8192Open = isPortOpen(ip, 8192, 500);
+                    // Chế độ 2: TCP Socket Port 8192 (Novatek Live MJPEG Stream)
+                    boolean port8192Open = isPortOpen(ip, 8192, 1200);
                     if (port8192Open && currentMode != StreamMode.FORCE_SNAPSHOT_CGI && isStreaming) {
                         activeStreamingPort = 8192;
                         updateStatus("Mở luồng Live MJPEG (Port 8192)...", false);
@@ -433,8 +458,8 @@ public class VietMapStreamReader {
                         if (streamSuccess) break;
                     }
 
-                    // Chế độ 3: Snapshot CGI Fallback (Cực kỳ ổn định trên TS-C1)
-                    if (port80Open && isStreaming) {
+                    // Chế độ 3: Snapshot CGI Polling (Tương thích cao trên TS-C1)
+                    if (isStreaming) {
                         updateStatus("Mở luồng Snapshot CGI (" + ip + ")...", false);
                         streamSuccess = streamSnapshotPollingLoop(ip);
                         if (streamSuccess) break;
@@ -503,7 +528,7 @@ public class VietMapStreamReader {
         InputStream in = null;
         try {
             socket = createWifiBoundSocket();
-            socket.setSoTimeout(3500);
+            socket.setSoTimeout(4000);
             socket.connect(new InetSocketAddress(host, port), 2500);
 
             OutputStream out = socket.getOutputStream();
@@ -538,9 +563,10 @@ public class VietMapStreamReader {
                         if (lastByte == 0xFF && currentByte == 0xD9) {
                             inJpeg = false;
                             byte[] jpegBytes = frameBuffer.toByteArray();
-                            if (jpegBytes.length > 2048) {
+                            if (jpegBytes.length > 1024) {
                                 BitmapFactory.Options opts = new BitmapFactory.Options();
                                 opts.inSampleSize = 1;
+                                opts.inPreferredConfig = Bitmap.Config.RGB_565;
                                 Bitmap bmp = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length, opts);
                                 if (bmp != null) {
                                     frameCount++;
@@ -583,27 +609,40 @@ public class VietMapStreamReader {
      * Vòng lặp Snapshot HTTP CGI liên tục (Port 80) - Fallback chuẩn 100% cho TS-C1
      */
     private boolean streamSnapshotPollingLoop(String host) {
-        String snapshotUrl = "http://" + host + "/?custom=1&cmd=2017";
-        Bitmap testBmp = fetchHttpSnapshotFrame(snapshotUrl);
-        if (testBmp == null) {
-            snapshotUrl = "http://" + host + "/cgi-bin/hi3510/snap.cgi";
-            testBmp = fetchHttpSnapshotFrame(snapshotUrl);
+        String[] candidateSnapshotUrls = new String[]{
+                "http://" + host + "/?custom=1&cmd=2017",
+                "http://" + host + "/?custom=1&cmd=1001",
+                "http://" + host + "/cgi-bin/hi3510/snap.cgi",
+                "http://" + host + "/snapshot.jpg",
+                "http://" + host + "/snap.jpg",
+                "http://" + host + "/tmpfs/auto.jpg"
+        };
+
+        String workingSnapshotUrl = null;
+        Bitmap initialBmp = null;
+
+        for (String url : candidateSnapshotUrls) {
+            initialBmp = fetchHttpSnapshotFrame(url);
+            if (initialBmp != null) {
+                workingSnapshotUrl = url;
+                break;
+            }
         }
 
-        if (testBmp == null) {
-            postLog("[Snapshot] Không phản hồi trên cổng CGI");
+        if (workingSnapshotUrl == null || initialBmp == null) {
+            postLog("[Snapshot] Không phản hồi trên cổng CGI (" + host + ")");
             return false;
         }
 
-        postLog("[Snapshot] Khởi chạy luồng ảnh CGI liên tục (~12 FPS)...");
-        handleDecodedFrame(testBmp, "Snapshot CGI");
+        postLog("[Snapshot] Đã tìm thấy URL Snapshot: " + workingSnapshotUrl);
+        handleDecodedFrame(initialBmp, "Snapshot CGI");
 
         int successFrames = 1;
         long loopStart = System.currentTimeMillis();
 
-        while (isStreaming && (System.currentTimeMillis() - loopStart < 20000)) {
+        while (isStreaming && (System.currentTimeMillis() - loopStart < 25000)) {
             long frameStart = System.currentTimeMillis();
-            Bitmap snap = fetchHttpSnapshotFrame(snapshotUrl);
+            Bitmap snap = fetchHttpSnapshotFrame(workingSnapshotUrl);
             if (snap != null) {
                 successFrames++;
                 handleDecodedFrame(snap, "Snapshot CGI");
@@ -617,9 +656,9 @@ public class VietMapStreamReader {
             }
 
             long elapsed = System.currentTimeMillis() - frameStart;
-            if (elapsed < 80) { // Duy trì ~12 FPS
+            if (elapsed < 70) { // Duy trì ~14 FPS
                 try {
-                    Thread.sleep(80 - elapsed);
+                    Thread.sleep(70 - elapsed);
                 } catch (InterruptedException ignored) {}
             }
         }
@@ -627,15 +666,16 @@ public class VietMapStreamReader {
         return successFrames > 1;
     }
 
-    private Bitmap fetchHttpSnapshotFrame(String snapshotUrl) {
+    private byte[] fetchHttpBytes(String urlStr) {
         HttpURLConnection connection = null;
         InputStream input = null;
+        ByteArrayOutputStream buffer = null;
         try {
-            connection = openWifiConnection(snapshotUrl);
+            connection = openWifiConnection(urlStr);
             if (connection == null) return null;
 
-            connection.setConnectTimeout(900);
-            connection.setReadTimeout(1200);
+            connection.setConnectTimeout(1500);
+            connection.setReadTimeout(2000);
             connection.setUseCaches(false);
             connection.setDoInput(true);
             connection.setRequestProperty("User-Agent", "VIETMAP REC/2.0");
@@ -644,18 +684,43 @@ public class VietMapStreamReader {
 
             int code = connection.getResponseCode();
             if (code == 200) {
-                input = connection.getInputStream();
-                BitmapFactory.Options opts = new BitmapFactory.Options();
-                opts.inSampleSize = 1;
-                return BitmapFactory.decodeStream(input, null, opts);
+                input = new BufferedInputStream(connection.getInputStream(), 32768);
+                buffer = new ByteArrayOutputStream(32768);
+                byte[] temp = new byte[8192];
+                int read;
+                while ((read = input.read(temp)) != -1) {
+                    buffer.write(temp, 0, read);
+                }
+                byte[] result = buffer.toByteArray();
+                if (result.length > 500) {
+                    return result;
+                }
             }
         } catch (Exception ignored) {
         } finally {
+            if (buffer != null) {
+                try { buffer.close(); } catch (Exception ignored) {}
+            }
             if (input != null) {
                 try { input.close(); } catch (Exception ignored) {}
             }
             if (connection != null) {
                 connection.disconnect();
+            }
+        }
+        return null;
+    }
+
+    private Bitmap fetchHttpSnapshotFrame(String snapshotUrl) {
+        byte[] bytes = fetchHttpBytes(snapshotUrl);
+        if (bytes != null && bytes.length > 500) {
+            try {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inSampleSize = 1;
+                opts.inPreferredConfig = Bitmap.Config.RGB_565;
+                return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, opts);
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi decode ByteArray sang Bitmap", e);
             }
         }
         return null;
