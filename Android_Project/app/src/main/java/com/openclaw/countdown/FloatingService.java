@@ -303,37 +303,18 @@ public class FloatingService extends Service {
             }
 
             @Override
-            public void onVehicleMoving(float speedKmh) {
+            public void onVehicleMoving(final float speedKmh) {
                 if (isRedLightActive) {
                     if (speedKmh < 10.0f) {
-                        currentGpsSpeed = String.format("%.0f km/h (Đang nhích xe)", speedKmh);
+                        currentGpsSpeed = String.format(java.util.Locale.getDefault(), "%.0f km/h (Đang nhích xe)", speedKmh);
                         pushStatusToUi();
-                        return;
-                    } else {
-                        currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
-                        currentAiStatus = "Xe đang chạy - Đang đếm ngầm";
-                        pushStatusToUi();
-                        mainHandler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (webView != null) {
-                                    webView.evaluateJavascript("if(window.onVehicleMovedBackground){window.onVehicleMovedBackground();}", null);
-                                    if (params != null && windowManager != null) {
-                                        params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                                        try {
-                                            windowManager.updateViewLayout(webView, params);
-                                        } catch (Exception e) {}
-                                    }
-                                }
-                            }
-                        });
                         return;
                     }
                 }
                 isRedLightActive = false;
                 
-                currentGpsSpeed = String.format("%.0f km/h (Đang di chuyển)", speedKmh);
-                currentAiStatus = "Xe đang chạy - Tạm ẩn đếm ngược";
+                currentGpsSpeed = String.format(java.util.Locale.getDefault(), "%.0f km/h (Đang di chuyển)", speedKmh);
+                currentAiStatus = "Xe đang chạy - Thu nhỏ HUD";
                 pushStatusToUi();
                 if (detector != null) {
                     detector.reset();
@@ -342,10 +323,9 @@ public class FloatingService extends Service {
                     @Override
                     public void run() {
                         if (webView != null) {
-                            // Collapse về bubble nhỏ thay vì ẩn hẳn → người dùng vẫn bấm xem báo cáo được
-                            webView.evaluateJavascript("if(window.onVehicleMovedBackground){window.onVehicleMovedBackground();}", null);
+                            // Tự động thu nhỏ HUD khi xe lăn bánh
+                            webView.evaluateJavascript("if(window.onVehicleMoving){window.onVehicleMoving(" + speedKmh + ");}else if(window.onVehicleMovedBackground){window.onVehicleMovedBackground();}", null);
                             if (params != null && windowManager != null) {
-                                // Giữ nguyên FLAG_NOT_FOCUSABLE nhưng bỏ FLAG_NOT_TOUCHABLE để bấm được
                                 params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
                                 try {
                                     windowManager.updateViewLayout(webView, params);
@@ -357,9 +337,17 @@ public class FloatingService extends Service {
             }
 
             @Override
-            public void onSpeedUpdated(float speedKmh) {
-                currentGpsSpeed = String.format("%.0f km/h (%s)", speedKmh, speedKmh <= 5.0f ? "Đã dừng" : "Đang di chuyển");
+            public void onSpeedUpdated(final float speedKmh) {
+                currentGpsSpeed = String.format(java.util.Locale.getDefault(), "%.0f km/h (%s)", speedKmh, speedKmh <= 4.0f ? "Đã dừng" : "Đang di chuyển");
                 pushStatusToUi();
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            webView.evaluateJavascript("if(window.updateSpeedValue){window.updateSpeedValue(" + speedKmh + ");}", null);
+                        }
+                    }
+                });
             }
         });
 

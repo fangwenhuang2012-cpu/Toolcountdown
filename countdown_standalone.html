@@ -457,16 +457,78 @@ html, body {
 .card-footer-tip {
     font-size: 0.68rem;
     color: var(--text-muted);
-    text-align: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding-top: 6px;
-    font-weight: 600;
+/* Mini Bubble Mode - Khi xe đang chạy */
+.mini-bubble {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(10, 14, 23, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 2px solid var(--hud-border-green);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 16px var(--hud-glow-green);
+    padding: 7px 14px;
+    border-radius: 22px;
+    cursor: pointer;
+    touch-action: none;
+    white-space: nowrap;
+    user-select: none;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.mini-bubble:active {
+    transform: scale(0.95);
+}
+
+.mini-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #30d158;
+    box-shadow: 0 0 8px #30d158;
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+.mini-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #30d158;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.mini-speed {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #ffffff;
+    font-family: var(--digital-font), var(--sans-font);
+}
+
+.floating-widget.is-minimized {
+    gap: 0 !important;
+}
+
+.floating-widget.is-minimized .hud-main-panel,
+.floating-widget.is-minimized .status-expanded-card,
+.floating-widget.is-minimized .resize-handle {
+    display: none !important;
+}
+
+.floating-widget.is-minimized .mini-bubble {
+    display: flex !important;
 }
     </style>
 </head>
 <body>
     <div class="floating-widget theme-blue" id="floatingWidget">
         
+        <!-- Mini Bubble khi xe đang di chuyển -->
+        <div class="mini-bubble" id="miniBubble" onclick="handleMiniBubbleClick(event)" title="Chạm để mở to Full HUD">
+            <span class="mini-dot" id="miniCamDot"></span>
+            <span class="mini-label">AI CAM</span>
+            <span class="mini-speed" id="miniSpeedText">0 km/h</span>
+        </div>
+
         <div class="hud-main-panel" id="hudMainPanel">
             <div class="widget-header" id="widgetHeader">
                 <div class="drag-handle" title="Chạm giữ để di chuyển HUD trên màn hình ô tô">
@@ -992,11 +1054,65 @@ window.openWifiSettings = function() {
     }
 };
 
+let isMinimized = false;
+let currentSpeedKmh = 0;
+
+function minimizeHud(speed) {
+    if (typeof speed === 'number') {
+        currentSpeedKmh = Math.round(speed);
+    }
+    updateMiniBubbleSpeed(currentSpeedKmh);
+    if (isMinimized) return;
+    
+    isMinimized = true;
+    if (floatingWidget) {
+        floatingWidget.classList.add('is-minimized');
+        floatingWidget.classList.remove('hidden');
+    }
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        window.AndroidBridge.updateWindowBounds(15, 15, 145, 52);
+    }
+}
+
+function expandHud() {
+    isMinimized = false;
+    if (floatingWidget) {
+        floatingWidget.classList.remove('is-minimized');
+        floatingWidget.classList.remove('hidden');
+    }
+    const card = document.getElementById('statusExpandedCard');
+    const isStatusOpen = card && !card.classList.contains('hidden');
+    if (window.AndroidBridge && window.AndroidBridge.updateWindowBounds) {
+        const targetW = isStatusOpen ? 610 : 305;
+        const targetH = 355;
+        window.AndroidBridge.updateWindowBounds(15, 15, targetW, targetH);
+    }
+}
+
+function updateMiniBubbleSpeed(speed) {
+    if (typeof speed === 'number') {
+        currentSpeedKmh = Math.round(speed);
+    }
+    const speedEl = document.getElementById('miniSpeedText');
+    if (speedEl) {
+        speedEl.textContent = currentSpeedKmh + " km/h";
+    }
+}
+
+function handleMiniBubbleClick(e) {
+    if (e) e.stopPropagation();
+    expandHud();
+}
+
 function init() {
     getElements();
     checkEnvironment();
     if (widgetHeader && floatingWidget) {
         makeDraggable(floatingWidget, widgetHeader);
+    }
+    const miniBubble = document.getElementById('miniBubble');
+    if (miniBubble && floatingWidget) {
+        makeDraggable(floatingWidget, miniBubble);
     }
     if (audioBtn) {
         audioBtn.textContent = audioEnabled ? '🔊' : '🔇';
@@ -1015,35 +1131,53 @@ window.setCameraCountdown = function(seconds) {
     }
     console.log("[VietMap AI HUD] Camera detected Red Light countdown seconds:", seconds);
 
+    // Tự động mở bung Full HUD khi phát hiện đèn đỏ
+    expandHud();
+
     countdownTime = seconds;
     if (initialSetTime <= 0 || seconds > initialSetTime || !isRunning) {
         initialSetTime = seconds;
-    }
-
-    if (floatingWidget) {
-        floatingWidget.classList.remove('hidden');
     }
 
     startTimer();
 };
 
 window.onVehicleStopped = function() {
-    console.log("[VietMap AI HUD] Vehicle stopped - ready to detect");
-    if (floatingWidget) {
-        floatingWidget.classList.remove('hidden');
+    console.log("[VietMap AI HUD] Vehicle stopped - expanding Full HUD");
+    expandHud();
+};
+
+window.onVehicleMoving = function(speed) {
+    console.log("[VietMap AI HUD] Vehicle moving: " + speed + " km/h - minimizing HUD");
+    if (typeof speed === 'number') {
+        currentSpeedKmh = Math.round(speed);
+    }
+    updateMiniBubbleSpeed(currentSpeedKmh);
+    
+    // Nếu xe chạy và không có đèn đỏ đang đếm ngược -> Thu nhỏ thành mini bubble
+    if (!isRunning || countdownTime <= 0) {
+        minimizeHud(speed);
     }
 };
 
 window.onVehicleMovedBackground = function() {
-    console.log("[VietMap AI HUD] Vehicle moved background");
+    console.log("[VietMap AI HUD] Vehicle moved background - minimizing");
     if (!isRunning || countdownTime <= 0) {
         stopTimer();
+        minimizeHud();
     }
 };
 
+window.updateSpeedValue = function(speed) {
+    updateMiniBubbleSpeed(speed);
+};
+
 window.onVehicleMoved = function() {
-    console.log("[VietMap AI HUD] Vehicle moved - hiding HUD");
-    stopTimer();
+    console.log("[VietMap AI HUD] Vehicle moved - minimizing HUD");
+    if (!isRunning || countdownTime <= 0) {
+        stopTimer();
+        minimizeHud();
+    }
 };
 
 window.onRedLightEnded = function() {
@@ -1055,6 +1189,13 @@ window.onRedLightEnded = function() {
     if (statusIcon) statusIcon.textContent = "🟢";
 
     playFinishAlarm();
+
+    // Sau khi đèn xanh, nếu xe đang di chuyển thì tự động thu nhỏ lại
+    setTimeout(() => {
+        if (currentSpeedKmh > 4) {
+            minimizeHud();
+        }
+    }, 2500);
 };
     </script>
 </body>
