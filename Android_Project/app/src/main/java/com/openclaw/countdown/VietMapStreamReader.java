@@ -140,11 +140,6 @@ public class VietMapStreamReader {
                         NetworkCapabilities caps = cm.getNetworkCapabilities(net);
                         if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
                             cameraWifiNetwork = net;
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                try {
-                                    cm.bindProcessToNetwork(net);
-                                } catch (Exception ignored) {}
-                            }
                             return;
                         }
                     }
@@ -159,24 +154,14 @@ public class VietMapStreamReader {
                         @Override
                         public void onAvailable(Network network) {
                             cameraWifiNetwork = network;
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                try {
-                                    cm.bindProcessToNetwork(network);
-                                } catch (Exception ignored) {}
-                            }
-                            postLog("Wi-Fi Interface khả dụng (Network " + network + ")");
+                            postLog("Wi-Fi Interface Cam khả dụng (Network " + network + ")");
                         }
 
                         @Override
                         public void onLost(Network network) {
                             if (cameraWifiNetwork != null && cameraWifiNetwork.equals(network)) {
                                 cameraWifiNetwork = null;
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    try {
-                                        cm.bindProcessToNetwork(null);
-                                    } catch (Exception ignored) {}
-                                }
-                                postLog("Mất kết nối Wi-Fi Interface!");
+                                postLog("Mất kết nối Wi-Fi Interface Cam!");
                             }
                         }
                     };

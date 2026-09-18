@@ -187,14 +187,15 @@ public class FloatingService extends Service {
                 pushStatusToUi();
 
                 android.content.SharedPreferences prefs = getSharedPreferences("VietMapConfig", MODE_PRIVATE);
-                String savedPass = prefs.getString("wifi_pass_" + ssid, null);
-                
-                if (savedPass != null) {
-                    wifiScanner.connectToVietMapCam(ssid, savedPass);
-                } else if (!ssid.equals(lastPromptedSsid)) {
-                    lastPromptedSsid = ssid;
-                    // Tự động kết nối với mật khẩu mặc định
-                    wifiScanner.connectToVietMapCam(ssid, "12345678");
+                boolean autoConnect = prefs.getBoolean("auto_connect_cam_wifi", false);
+                if (autoConnect) {
+                    String savedPass = prefs.getString("wifi_pass_" + ssid, null);
+                    if (savedPass != null) {
+                        wifiScanner.connectToVietMapCam(ssid, savedPass);
+                    } else if (!ssid.equals(lastPromptedSsid)) {
+                        lastPromptedSsid = ssid;
+                        wifiScanner.connectToVietMapCam(ssid, "12345678");
+                    }
                 }
             }
 
@@ -528,6 +529,24 @@ public class FloatingService extends Service {
                     if (wifiScanner != null) {
                         wifiScanner.scanForVietMapCam();
                     }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void disconnectWifi() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (wifiScanner != null) {
+                        wifiScanner.disconnectFromVietMapCam();
+                    }
+                    if (streamReader != null) {
+                        streamReader.stopStreaming();
+                    }
+                    currentWifiSsid = "Chưa kết nối Wi-Fi Camera VietMap";
+                    currentStreamStatus = "Đã ngắt luồng Video";
+                    pushStatusToUi();
                 }
             });
         }

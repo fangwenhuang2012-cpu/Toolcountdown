@@ -192,20 +192,8 @@ public class VietMapWifiScanner {
 
         Log.d(TAG, "Đang kết nối tới Wi-Fi Camera VietMap: " + ssid);
 
-        // 1. Trên Android 10+ (API 29+): Tự động đăng ký WifiNetworkSuggestion để OS tự bắt sóng ngầm
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && wifiManager != null) {
-            try {
-                WifiNetworkSuggestion suggestion = new WifiNetworkSuggestion.Builder()
-                        .setSsid(ssid)
-                        .setWpa2Passphrase(password)
-                        .setIsAppInteractionRequired(false)
-                        .build();
-                wifiManager.addNetworkSuggestions(Collections.singletonList(suggestion));
-                Log.d(TAG, "Đã thêm WifiNetworkSuggestion tự động kết nối ngầm cho " + ssid);
-            } catch (Exception ignored) {}
-        }
-
-        // 2. Yêu cầu kết nối trực tiếp qua NetworkSpecifier (Android 10+)
+        // Sử dụng NetworkSpecifier trên Android 10+ (API 29+) để kết nối riêng kênh Cam cục bộ
+        // Không dùng WifiNetworkSuggestion và KHÔNG gọi bindProcessToNetwork để tránh làm Android Box mất mạng SIM 4G
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
@@ -232,10 +220,7 @@ public class VietMapWifiScanner {
                     @Override
                     public void onAvailable(Network network) {
                         super.onAvailable(network);
-                        Log.d(TAG, "Đã kết nối thành công qua NetworkSpecifier: " + ssid);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            connectivityManager.bindProcessToNetwork(network);
-                        }
+                        Log.d(TAG, "Đã kết nối thành công qua NetworkSpecifier (Kênh Cam cục bộ): " + ssid);
                         
                         if (listener != null) {
                             listener.onConnectedToVietMapCam(ssid);
@@ -286,6 +271,25 @@ public class VietMapWifiScanner {
             } catch (Exception e) {
                 Log.e(TAG, "Lỗi khi kết nối Wi-Fi (Android 9 trở xuống)", e);
             }
+        }
+    }
+
+    public void disconnectFromVietMapCam() {
+        try {
+            if (networkCallback != null) {
+                ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cm != null) {
+                    try {
+                        cm.unregisterNetworkCallback(networkCallback);
+                    } catch (Exception ignored) {}
+                }
+                networkCallback = null;
+            }
+            if (listener != null) {
+                listener.onError("Đã ngắt kết nối Wi-Fi Cam");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Lỗi khi ngắt kết nối Wi-Fi Cam", e);
         }
     }
 
